@@ -1,0 +1,41 @@
+{
+  "model": "Wan-AI/Wan2.1-T2V-14B",
+  "resolution": "1280x720",
+  "output_frames": 61,
+  "latent_frames": 16,
+  "dit_attention_tokens": 57600,
+  "sample_steps": 5,
+  "base_seed": 0,
+  "matrix_tile_shape": [
+    64,
+    64
+  ],
+  "tile_axes": [
+    "query_token",
+    "key_token"
+  ],
+  "routing_granularity": "independent per layer, head, CFG branch, query-matrix-tile, and denoising step",
+  "route_update": "first step exact dense matrix; later steps use only previous-step matrix blocks",
+  "dense": {
+    "step_seconds": 81.29337340760102,
+    "vbench_imaging_quality": {
+      "normalized": 0.6125538159980148,
+      "raw": 61.25538159980149
+    }
+  },
+  "matrix_reuse": {
+    "hard_keep_cap": 0.625,
+    "step_seconds": 853.3709964637994,
+    "measured_speedup": 0.09526146745608262,
+    "dense_probe_sparse_step_tile_fraction": 0.5694119312211114,
+    "dense_probe_five_step_matmul_upper_bound": 1.5254842556871409,
+    "ssim_to_dense": 0.8012306194144747,
+    "psnr_to_dense": 23.65107107944176,
+    "lpips_to_dense": 0.17183772389028892,
+    "vbench_imaging_quality": {
+      "normalized": 0.5978160739335858,
+      "raw": 59.78160739335858
+    }
+  },
+  "metric_backend": "pyiqa 0.1.16 on 61 decoded RGB frames in [0,1]"
+}

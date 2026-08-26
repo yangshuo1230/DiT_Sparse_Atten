@@ -1,0 +1,74 @@
+[
+  {
+    "tokens": 3600,
+    "heads": 40,
+    "head_dim": 128,
+    "matrix_tile_shape": "16x16",
+    "query_chunk": 256,
+    "keep_fraction_per_query_tile_and_head": 0.5,
+    "theoretical_matmul_speedup": 2.0,
+    "dense_seconds": 0.003027162669847409,
+    "matrix_sparse_seconds": 0.8344781110014688,
+    "empirical_speedup": 0.003627611832998793
+  },
+  {
+    "tokens": 3600,
+    "heads": 40,
+    "head_dim": 128,
+    "matrix_tile_shape": "16x16",
+    "query_chunk": 256,
+    "keep_fraction_per_query_tile_and_head": 0.625,
+    "theoretical_matmul_speedup": 1.6,
+    "dense_seconds": 0.0030175700036731237,
+    "matrix_sparse_seconds": 0.8257802950004892,
+    "empirical_speedup": 0.0036542044196771926
+  },
+  {
+    "tokens": 3600,
+    "heads": 40,
+    "head_dim": 128,
+    "matrix_tile_shape": "32x32",
+    "query_chunk": 256,
+    "keep_fraction_per_query_tile_and_head": 0.5,
+    "theoretical_matmul_speedup": 2.0,
+    "dense_seconds": 0.0030138023333468786,
+    "matrix_sparse_seconds": 0.4098866319982335,
+    "empirical_speedup": 0.007352770493280853
+  },
+  {
+    "tokens": 3600,
+    "heads": 40,
+    "head_dim": 128,
+    "matrix_tile_shape": "32x32",
+    "query_chunk": 256,
+    "keep_fraction_per_query_tile_and_head": 0.625,
+    "theoretical_matmul_speedup": 1.6,
+    "dense_seconds": 0.002995716335135512,
+    "matrix_sparse_seconds": 0.4241089080023812,
+    "empirical_speedup": 0.007063554380986245
+  },
+  {
+    "tokens": 3600,
+    "heads": 40,
+    "head_dim": 128,
+    "matrix_tile_shape": "64x64",
+    "query_chunk": 256,
+    "keep_fraction_per_query_tile_and_head": 0.5,
+    "theoretical_matmul_speedup": 2.0,
+    "dense_seconds": 0.003018986331881024,
+    "matrix_sparse_seconds": 0.2192305229982594,
+    "empirical_speedup": 0.013770830314102719
+  },
+  {
+    "tokens": 3600,
+    "heads": 40,
+    "head_dim": 128,
+    "matrix_tile_shape": "64x64",
+    "query_chunk": 256,
+    "keep_fraction_per_query_tile_and_head": 0.625,
+    "theoretical_matmul_speedup": 1.6,
+    "dense_seconds": 0.003011323332126873,
+    "matrix_sparse_seconds": 0.22799270499672275,
+    "empirical_speedup": 0.01320798107189508
+  }
+]

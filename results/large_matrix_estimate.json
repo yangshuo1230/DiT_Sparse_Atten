@@ -1,0 +1,28 @@
+{
+  "definition": "full attention matrix A=softmax(QK^T), tiled on both query and key axes",
+  "routing_granularity": "independent per layer, head, CFG branch, query-matrix-tile, and denoising step",
+  "official_wan_shape": {
+    "resolution": "1280x720",
+    "output_frames": 61,
+    "latent_frames": 16,
+    "tokens_per_latent_frame": 3600,
+    "attention_tokens": 57600,
+    "matrix_tile_shape": [
+      64,
+      64
+    ],
+    "tiles_per_axis": 900,
+    "matrix_tiles_per_head": 810000,
+    "heads": 40
+  },
+  "reuse_only_policy": {
+    "next_step_recall": 0.9103002213709988,
+    "next_step_mass_covered": 0.9034011398721487,
+    "sparse_step_matrix_tile_fraction": 0.5694119312211114,
+    "five_step_matmul_work_fraction": 0.6555295449768892,
+    "five_step_matmul_upper_bound": 1.5254842556871409,
+    "selected_matrix_tiles_per_head_at_large_shape": 461224,
+    "measured_end_to_end_speedup": 0.09526146745608262
+  },
+  "note": "The upper bound counts tile matmul work only; it excludes routing, metadata, gathers, softmax, V projection, and model layers outside attention."
+}

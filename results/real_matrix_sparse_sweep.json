@@ -1,0 +1,84 @@
+{
+  "model": "Wan-AI/Wan2.1-T2V-14B",
+  "size": "832*480",
+  "frames": 17,
+  "sample_steps": 5,
+  "base_seed": 0,
+  "matrix_tile_shape": [
+    16,
+    16
+  ],
+  "tile_axes": [
+    "query_token",
+    "key_token"
+  ],
+  "query_chunk": 256,
+  "routing_granularity": "independent per layer, head, CFG branch, query-matrix-tile, and denoising step",
+  "route_update": "first step exact dense matrix; later steps use only previously selected matrix blocks",
+  "metric_backend": "pyiqa 0.1.16 on decoded RGB frames in [0,1]",
+  "strategies": [
+    {
+      "strategy": "dense",
+      "step_seconds": 5.028470715798903,
+      "measured_speedup": 1.0,
+      "vbench_imaging_quality_normalized": 0.42205653583302216,
+      "vbench_imaging_quality_raw": 42.205653583302215
+    },
+    {
+      "strategy": "matrix-reuse-0625",
+      "locality_policy": "reuse-only",
+      "hard_keep_cap": 0.625,
+      "step_seconds": 142.6885912281985,
+      "measured_speedup": 0.03524087435804162,
+      "dense_probe_predicted_sparse_step_tile_fraction": 0.49408683024263156,
+      "dense_probe_five_step_matmul_upper_bound": 1.6799114689241315,
+      "ssim_to_dense": 0.7980606101017084,
+      "psnr_to_dense": 20.948635998894186,
+      "lpips_to_dense": 0.3051709690514733,
+      "vbench_imaging_quality_normalized": 0.5690054411046646,
+      "vbench_imaging_quality_raw": 56.900544110466456
+    },
+    {
+      "strategy": "matrix-directional-0625",
+      "locality_policy": "directional-c0.15-m0.5-h2.0",
+      "hard_keep_cap": 0.625,
+      "step_seconds": 169.45388850299932,
+      "measured_speedup": 0.029674566693167974,
+      "dense_probe_predicted_sparse_step_tile_fraction": 0.5319355090919271,
+      "dense_probe_five_step_matmul_upper_bound": 1.5985973081739733,
+      "ssim_to_dense": 0.8083638715786318,
+      "psnr_to_dense": 22.231067545273724,
+      "lpips_to_dense": 0.2607950094868155,
+      "vbench_imaging_quality_normalized": 0.5506805891149185,
+      "vbench_imaging_quality_raw": 55.068058911491846
+    },
+    {
+      "strategy": "matrix-all-eight-0625",
+      "locality_policy": "all-eight-neighbours",
+      "hard_keep_cap": 0.625,
+      "step_seconds": 170.75557148279913,
+      "measured_speedup": 0.029448355167172046,
+      "dense_probe_predicted_sparse_step_tile_fraction": 0.7348560076621652,
+      "dense_probe_five_step_matmul_upper_bound": 1.2692210742230525,
+      "ssim_to_dense": 0.8283712048207964,
+      "psnr_to_dense": 21.24542169009938,
+      "lpips_to_dense": 0.22385007931905634,
+      "vbench_imaging_quality_normalized": 0.5048344892614028,
+      "vbench_imaging_quality_raw": 50.483448926140284
+    },
+    {
+      "strategy": "matrix-directional-0750",
+      "locality_policy": "directional-c0.15-m0.5-h2.0",
+      "hard_keep_cap": 0.75,
+      "step_seconds": 171.09009042399992,
+      "measured_speedup": 0.02939077712412926,
+      "dense_probe_predicted_sparse_step_tile_fraction": 0.5319355090919271,
+      "dense_probe_five_step_matmul_upper_bound": 1.5985973081739733,
+      "ssim_to_dense": 0.8063653762833267,
+      "psnr_to_dense": 22.052250469432156,
+      "lpips_to_dense": 0.26794808226473193,
+      "vbench_imaging_quality_normalized": 0.6110260155621696,
+      "vbench_imaging_quality_raw": 61.10260155621697
+    }
+  ]
+}
