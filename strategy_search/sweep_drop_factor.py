@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -22,6 +23,8 @@ def parse_args():
     p.add_argument("--python", default=sys.executable)
     p.add_argument("--infer", type=Path, default=Path("infer.py"))
     p.add_argument("--keep-outputs", action="store_true")
+    p.add_argument("--no-dense-reference", action="store_true",
+                   help="skip the dense baseline run")
     p.add_argument("infer_args", nargs=argparse.REMAINDER,
                    help="extra args passed to infer.py; do not include --backend/--drop-factor")
     return p.parse_args()
@@ -32,6 +35,29 @@ def main():
     factors = [float(x) for x in args.drop_factors.split(",") if x.strip()]
     args.output_dir.mkdir(parents=True, exist_ok=True)
     records = []
+    dense_reference = None
+    extra_args = list(args.infer_args)
+    if extra_args[:1] == ["--"]:
+        extra_args = extra_args[1:]
+    if not args.no_dense_reference:
+        dense_video = args.output_dir / "dense_reference.mp4"
+        dense_cmd = [args.python, str(args.infer), "--backend", "dense",
+                     "--output", str(dense_video)] + extra_args
+        print("$", " ".join(dense_cmd), flush=True)
+        started = time.perf_counter()
+        completed = subprocess.run(dense_cmd, env=os.environ.copy())
+        if completed.returncode:
+            raise SystemExit(
+                f"dense reference failed with exit code {completed.returncode}")
+        dense_reference = {
+            "step_count": None,
+            "executed_tile_fraction": 1.0,
+            "attention_mass_fraction": 1.0,
+            "wall_seconds": time.perf_counter() - started,
+            "video_path": str(dense_video),
+        }
+        if not args.keep_outputs:
+            dense_video.unlink(missing_ok=True)
     for factor in factors:
         tag = f"drop_{factor:g}"
         stats_path = args.output_dir / f"{tag}.jsonl"
@@ -41,9 +67,6 @@ def main():
                "--drop-factor", str(factor), "--output", str(video_path)]
         # argparse.REMAINDER keeps the conventional separator; it is for this
         # wrapper only and must not be forwarded to infer.py.
-        extra_args = list(args.infer_args)
-        if extra_args[:1] == ["--"]:
-            extra_args = extra_args[1:]
         cmd.extend(extra_args)
         env = os.environ.copy()
         env["WAN_SPARSE_STATS_PATH"] = str(stats_path)
@@ -72,7 +95,10 @@ def main():
         if not args.keep_outputs:
             video_path.unlink(missing_ok=True)
     args.summary.parent.mkdir(parents=True, exist_ok=True)
-    args.summary.write_text(json.dumps(records, indent=2), encoding="utf-8")
+    args.summary.write_text(json.dumps({
+        "dense_reference": dense_reference,
+        "sparse_runs": records,
+    }, indent=2), encoding="utf-8")
     print(f"wrote {args.summary}")
 
 
