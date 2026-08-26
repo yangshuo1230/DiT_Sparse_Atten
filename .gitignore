@@ -1,5 +1,7 @@
 __pycache__/
 *.py[cod]
 *.mp4
+strategy_search/results/drop_factor/
+strategy_search/results/*_summary.json
 .idea/
 .vscode/
