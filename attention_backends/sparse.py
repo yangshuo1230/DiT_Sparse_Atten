@@ -42,6 +42,8 @@ class SparseConfig:
     # Experimental fused QK/online-softmax/PV output path. Route statistics
     # continue to use the readable PyTorch reference implementation.
     use_triton: bool = False
+    # Prepare the next route while Wan executes cross-attention/FFN.
+    prefetch_route: bool = True
 
 
 @dataclass(frozen=True)
@@ -615,6 +617,27 @@ class MatrixSparseBackend:
         self.config = config or SparseConfig()
         self.dense = DenseBackend()
         self.state = {}
+        self._routing_streams = {}
+
+    def _prefetch_next_route(self, state, layout, device):
+        """Build and asynchronously upload the next mask for the next block."""
+        predicted = _expand(
+            state, self.config.policy, self.config.centroid_threshold,
+            self.config.huge_factor, layout).contiguous()
+        if not self.config.prefetch_route or device.type != "cuda":
+            return None, None
+        # Pageable CPU tensors cannot overlap a H2D copy. Pinning this small
+        # route mask makes the copy genuinely asynchronous on CUDA devices.
+        pinned = predicted.pin_memory()
+        stream = self._routing_streams.get(device)
+        if stream is None:
+            stream = torch.cuda.Stream(device=device)
+            self._routing_streams[device] = stream
+        with torch.cuda.stream(stream):
+            device_mask = pinned.to(device, non_blocking=True)
+            ready = torch.cuda.Event()
+            ready.record(stream)
+        return device_mask, ready
 
     @staticmethod
     def _record_stats(payload):
@@ -656,9 +679,14 @@ class MatrixSparseBackend:
             })
             return layout.from_tile_major(output)
         previous = self.state[key]
-        route = _expand(
-            previous, self.config.policy, self.config.centroid_threshold,
-            self.config.huge_factor, layout).to(q.device)
+        route = previous.pop("prefetched_mask", None)
+        ready = previous.pop("prefetched_event", None)
+        if route is not None and ready is not None:
+            torch.cuda.current_stream(q.device).wait_event(ready)
+        else:
+            route = _expand(
+                previous, self.config.policy, self.config.centroid_threshold,
+                self.config.huge_factor, layout).to(q.device)
         tiles = route.shape[-1]
         stats = _empty_route_stats(heads, tiles, q.device)
         # Write chunks directly into their final positions. Keeping a list and
@@ -713,7 +741,7 @@ class MatrixSparseBackend:
         })
         # Keep the large, persistent route on CPU. Only the predicted boolean
         # mask is transferred back to the accelerator on the next step.
-        self.state[key] = {
+        next_state = {
             "mask": next_mask.cpu(),
             "mass": normalized.to(torch.float16).cpu(),
             "centroid_q_y": (
@@ -728,6 +756,12 @@ class MatrixSparseBackend:
             "grid": (layout.frames, layout.height, layout.width),
             "spatial_tile": (layout.tile_h, layout.tile_w),
         }
+        device_mask, ready = self._prefetch_next_route(
+            next_state, layout, q.device)
+        if device_mask is not None:
+            next_state["prefetched_mask"] = device_mask
+            next_state["prefetched_event"] = ready
+        self.state[key] = next_state
         return layout.from_tile_major(output)
 
     def __call__(self, q, k, v, softmax_scale=None, **kwargs):

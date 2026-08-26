@@ -39,6 +39,9 @@ def parse_args():
     parser.add_argument(
         "--triton-sparse", action=argparse.BooleanOptionalAction, default=False,
         help="use the experimental fused Triton sparse-attention output kernel")
+    parser.add_argument(
+        "--route-prefetch", action=argparse.BooleanOptionalAction, default=True,
+        help="prefetch the next sparse route on a separate CUDA stream")
     return parser.parse_args()
 
 
@@ -56,6 +59,7 @@ def install_backend(args):
         query_chunk=args.query_chunk,
         policy=args.policy,
         use_triton=args.triton_sparse,
+        prefetch_route=args.route_prefetch,
     ))
 
 
