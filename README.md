@@ -39,6 +39,11 @@ python3 infer.py --backend sparse --tile 64 --policy reuse \
   --triton-sparse --output output-sparse-triton.mp4
 ```
 
+The fused Triton path is used for `reuse`, where no per-step centroid
+statistics are required. `directional` currently uses the PyTorch reference
+path so it does not compute attention twice; its Triton statistics fusion is a
+separate optimization task.
+
 For sparse inference, `--tile` is a target spatial tile area rather than a
 linear token count. The backend reads Wan's `(F, H, W)` token grid and chooses
 an `H-tile x W-tile` shape with sides that exactly divide `H` and `W`. Each

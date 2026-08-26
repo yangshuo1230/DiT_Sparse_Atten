@@ -39,8 +39,8 @@ class SparseConfig:
     # average selected mass, while preserving at least one K block per Q row.
     drop_factor: float = 0.1
     huge_factor: float = 2.0
-    # Experimental fused QK/online-softmax/PV output path. Route statistics
-    # continue to use the readable PyTorch reference implementation.
+    # Experimental fused QK/online-softmax/PV output path. It is currently
+    # enabled only for reuse; directional needs the PyTorch statistics path.
     use_triton: bool = False
     # Prepare the next route while Wan executes cross-attention/FFN.
     prefetch_route: bool = True
@@ -535,7 +535,8 @@ def _triton_sparse_output(
 
 
 def sparse_chunk(q, k, v, route_mask, tile, start, end, scale,
-                 stats, token_offsets=None, use_triton=False):
+                 stats, token_offsets=None, use_triton=False,
+                 collect_stats=True):
     """Gather all selected keys for one aligned query chunk and run attention.
 
     Each (query tile, head) is a separate batch item with its own gathered K/V
@@ -556,6 +557,8 @@ def sparse_chunk(q, k, v, route_mask, tile, start, end, scale,
     if use_triton:
         triton_output = _triton_sparse_output(
             q_chunk, k, v, group_mask, tile, tokens, start, scale)
+    if triton_output is not None and not collect_stats:
+        return triton_output
     padded_indices, valid_keys = _group_indices(group_mask, tile, tokens)
     selected_k = k[0, padded_indices, group_heads[:, None]].to(q.dtype)
     selected_v = v[0, padded_indices, group_heads[:, None]].to(q.dtype)
@@ -688,6 +691,7 @@ class MatrixSparseBackend:
                 previous, self.config.policy, self.config.centroid_threshold,
                 self.config.huge_factor, layout).to(q.device)
         tiles = route.shape[-1]
+        fused_reuse = self.config.use_triton and self.config.policy == "reuse"
         stats = _empty_route_stats(heads, tiles, q.device)
         # Write chunks directly into their final positions. Keeping a list and
         # concatenating it would require another full output-sized allocation.
@@ -702,17 +706,29 @@ class MatrixSparseBackend:
             end = min(start + chunk, tokens)
             output[:, start:end] = sparse_chunk(
                 q, k, v, route, tile, start, end, scale,
-                stats, token_offsets, use_triton=self.config.use_triton)
-        normalized = stats["mass"] / tokens
-        denominator = stats["mass"].clamp_min(1e-12)
+                stats, token_offsets, use_triton=fused_reuse,
+                collect_stats=not fused_reuse)
+        if fused_reuse:
+            # Reuse has no centroid update. Apply the fixed drop threshold to
+            # the previous route mass and avoid recomputing QK/softmax in PyTorch.
+            next_mask = _drop_low_mass(
+                route.cpu(), previous["mass"], self.config.drop_factor)
+            normalized = previous["mass"].to(q.device)
+            denominator = normalized.clamp_min(1e-12)
+        else:
+            normalized = stats["mass"] / tokens
+            denominator = stats["mass"].clamp_min(1e-12)
         # The first dense step uses top-mass selection to bootstrap the route.
         # Later steps retain the route actually executed this step and contract
         # it only through the explicit low-mass drop policy.
-        next_mask = _drop_low_mass(
-            route, normalized, self.config.drop_factor)
+        if not fused_reuse:
+            next_mask = _drop_low_mass(
+                route, normalized, self.config.drop_factor)
+        next_mask_device = (next_mask.to(q.device)
+                            if next_mask.device != q.device else next_mask)
         previous_mass = previous["mass"].to(q.device).float()
         route_mass = (previous_mass * route.float()).sum().item() / max(1, heads)
-        next_mass = (previous_mass * next_mask.float()).sum().item() / max(1, heads)
+        next_mass = (previous_mass * next_mask_device.float()).sum().item() / max(1, heads)
         dense_probe_mass = None
         if os.getenv("WAN_DENSE_MASS_PROBE", "0") == "1":
             # This probe is intentionally opt-in: it recomputes dense QK/softmax
@@ -722,7 +738,7 @@ class MatrixSparseBackend:
                 target=1.0, keep=1.0, scale=scale)
             dense_probe_mass = dense_route["mass"].to(q.device).float()
             route_mass = (dense_probe_mass * route.float()).sum().item() / max(1, heads)
-            next_mass = (dense_probe_mass * next_mask.float()).sum().item() / max(1, heads)
+            next_mass = (dense_probe_mass * next_mask_device.float()).sum().item() / max(1, heads)
         self._record_stats({
             "step": int(step), "attention_id": int(attention_id),
             "branch": int(branch), "phase": "sparse",
@@ -761,6 +777,10 @@ class MatrixSparseBackend:
         if device_mask is not None:
             next_state["prefetched_mask"] = device_mask
             next_state["prefetched_event"] = ready
+        if fused_reuse:
+            next_state["mass"] = previous["mass"]
+            for name in ("centroid_q_y", "centroid_q_x", "centroid_k_y", "centroid_k_x"):
+                next_state[name] = previous[name]
         self.state[key] = next_state
         return layout.from_tile_major(output)
 
