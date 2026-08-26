@@ -30,3 +30,8 @@ python3 strategy_search/sweep_drop_factor.py \
 `executed_tile_fraction`
 是当前 step 实际执行的矩阵 tile 比例；`next_*` 是丢弃低质量 tile 后下一
 step 的预测值。
+
+脚本默认会先额外运行一次 dense reference，汇总中的
+`dense_reference.attention_mass_fraction=1.0` 和
+`dense_reference.executed_tile_fraction=1.0` 作为数值基线；使用
+`--no-dense-reference` 可跳过这次运行。
