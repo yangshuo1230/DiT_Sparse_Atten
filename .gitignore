@@ -1,6 +1,19 @@
 __pycache__/
 *.py[cod]
 *.mp4
+# Generated profiling artifacts: keep compact JSON/CSV/Markdown summaries,
+# but never commit videos, raw event streams, tensor dumps, or model weights.
+results/**/*.avi
+results/**/*.mov
+results/**/*.webm
+results/**/*.jsonl
+results/**/*.npy
+results/**/*.npz
+results/**/*.pt
+results/**/*.pth
+results/**/*.bin
+results/**/*.safetensors
+results/**/*.log
 strategy_search/results/drop_factor/
 strategy_search/results/*_summary.json
 .idea/

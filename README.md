@@ -15,6 +15,7 @@ profiles/
   decision.py            top-mass route decision benchmark
   kernel.py              dense versus sparse reference kernel benchmark
   matrix_sparsity.py      real full-matrix sparsity probe
+  hotspot_evolution.py    cross-step new-hotspot and suppression experiment
   single_query.py         real single-query and spatial 2x2 probe
   heatmap.py              spatial 2x2 heatmap renderer
 results/                  current evidence and reports
@@ -81,12 +82,35 @@ python3 -m profiles.gemm
 python3 -m profiles.decision
 python3 -m profiles.kernel --tokens 3648
 python3 -m profiles.matrix_sparsity --frames 5 --steps 5
+python3 -m profiles.hotspot_evolution --frames 5 --steps 5 --mode observe
 python3 -m profiles.single_query --frames 5 --steps 5
 python3 -m profiles.heatmap
 ```
 
 The real-model profilers use dense SDPA and save only bounded aggregate data.
 They do not write full QK or attention tensors.
+
+To test whether important tiles appear suddenly outside the previous route,
+first generate a same-seed dense reference and then run the counterfactual
+suppression profile:
+
+```bash
+python3 infer.py --backend dense --frames 5 --steps 5 \
+  --output results/hotspot_dense.mp4
+python3 -m profiles.hotspot_evolution --frames 5 --steps 5 --tile 64 \
+  --mode suppress --reference-video results/hotspot_dense.mp4 \
+  --video results/hotspot_suppress.mp4 \
+  --result results/hotspot_evolution_suppress.json
+```
+
+The experiment defines a sudden hotspot as a tile in the current exact 90%
+mass route but outside a one-tile coupled Q/K spatial dilation of the previous
+exact route, using the same spatial layout as the sparse backend. The
+suppression run returns attention restricted to that predicted route and
+reports attention-output error plus final-video PSNR/SSIM.  It intentionally
+retains dense QK for oracle measurement, so its runtime is not a speed result.
+The full protocol and suggested acceptance thresholds are in
+`profiles/HOTSPOT_EVOLUTION.md`.
 
 Current conclusions are in `results/FINAL_REPORT_ZH.md` and
 `results/SINGLE_QUERY_SPARSITY_ZH.md`.
