@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import json
+import os
 import sys
 from dataclasses import dataclass
 
@@ -477,6 +479,15 @@ class MatrixSparseBackend:
         self.dense = DenseBackend()
         self.state = {}
 
+    @staticmethod
+    def _record_stats(payload):
+        """Append opt-in route statistics as JSONL for strategy experiments."""
+        path = os.getenv("WAN_SPARSE_STATS_PATH")
+        if not path:
+            return
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
     def _sparse_attention(self, q, k, v, scale, layout):
         # RoPE was applied in Wan's original order. Jointly permuting Q/K/V is
         # attention-equivalent and only changes which tokens form a tile.
@@ -498,9 +509,18 @@ class MatrixSparseBackend:
             route["grid"] = (layout.frames, layout.height, layout.width)
             route["spatial_tile"] = (layout.tile_h, layout.tile_w)
             self.state[key] = route
+            self._record_stats({
+                "step": int(step), "attention_id": int(attention_id),
+                "branch": int(branch), "phase": "dense_bootstrap",
+                "tile_count": int(route["mask"].shape[-1]),
+                "executed_tile_fraction": 1.0,
+                "route_mass_fraction": float((route["mass"] * route["mask"]).sum().item() / max(1, heads)),
+                "next_tile_fraction": float(route["mask"].float().mean().item()),
+            })
             return layout.from_tile_major(output)
+        previous = self.state[key]
         route = _expand(
-            self.state[key], self.config.policy, self.config.centroid_threshold,
+            previous, self.config.policy, self.config.centroid_threshold,
             self.config.huge_factor, layout).to(q.device)
         tiles = route.shape[-1]
         stats = _empty_route_stats(heads, tiles, q.device)
@@ -525,6 +545,19 @@ class MatrixSparseBackend:
         # it only through the explicit low-mass drop policy.
         next_mask = _drop_low_mass(
             route, normalized, self.config.drop_factor)
+        previous_mass = previous["mass"].to(q.device).float()
+        route_mass = (previous_mass * route.float()).sum().item() / max(1, heads)
+        next_mass = (previous_mass * next_mask.float()).sum().item() / max(1, heads)
+        self._record_stats({
+            "step": int(step), "attention_id": int(attention_id),
+            "branch": int(branch), "phase": "sparse",
+            "tile_count": int(tiles),
+            "executed_tile_fraction": float(route.float().mean().item()),
+            "route_mass_fraction": float(route_mass),
+            "next_tile_fraction": float(next_mask.float().mean().item()),
+            "next_route_mass_fraction": float(next_mass),
+            "drop_factor": float(self.config.drop_factor),
+        })
         # Keep the large, persistent route on CPU. Only the predicted boolean
         # mask is transferred back to the accelerator on the next step.
         self.state[key] = {
