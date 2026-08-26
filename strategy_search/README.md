@@ -35,3 +35,8 @@ step 的预测值。
 `dense_reference.attention_mass_fraction=1.0` 和
 `dense_reference.executed_tile_fraction=1.0` 作为数值基线；使用
 `--no-dense-reference` 可跳过这次运行。
+
+策略 sweep 默认启用 `WAN_DENSE_MASS_PROBE=1`：每个 sparse step 用同一步的
+Q/K 重新计算 dense attention mass，仅用于测量当前 route 和下一 route 的真实
+mass coverage，不影响 sparse 输出。该模式会显著增加运行时间；使用
+`--no-dense-shadow-probe` 可关闭，但后续 mass 字段将恢复为 `null`。

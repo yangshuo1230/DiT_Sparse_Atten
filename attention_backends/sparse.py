@@ -685,6 +685,16 @@ class MatrixSparseBackend:
         previous_mass = previous["mass"].to(q.device).float()
         route_mass = (previous_mass * route.float()).sum().item() / max(1, heads)
         next_mass = (previous_mass * next_mask.float()).sum().item() / max(1, heads)
+        dense_probe_mass = None
+        if os.getenv("WAN_DENSE_MASS_PROBE", "0") == "1":
+            # This probe is intentionally opt-in: it recomputes dense QK/softmax
+            # for measurement only and never participates in sparse output.
+            dense_route, _ = _dense_route(
+                q, k, v, layout, self.config.query_chunk,
+                target=1.0, keep=1.0, scale=scale)
+            dense_probe_mass = dense_route["mass"].to(q.device).float()
+            route_mass = (dense_probe_mass * route.float()).sum().item() / max(1, heads)
+            next_mass = (dense_probe_mass * next_mask.float()).sum().item() / max(1, heads)
         self._record_stats({
             "step": int(step), "attention_id": int(attention_id),
             "branch": int(branch), "phase": "sparse",
@@ -692,12 +702,13 @@ class MatrixSparseBackend:
             "executed_tile_fraction": float(route.float().mean().item()),
             # Sparse softmax renormalizes over selected keys, so this is not
             # comparable to dense attention mass. Keep it separately labeled.
-            "route_mass_fraction": None,
+            "route_mass_fraction": float(route_mass) if dense_probe_mass is not None else None,
             "previous_route_mass_estimate": float(route_mass),
             "next_tile_fraction": float(next_mask.float().mean().item()),
-            "next_route_mass_fraction": None,
+            "next_route_mass_fraction": float(next_mass) if dense_probe_mass is not None else None,
             "next_previous_mass_estimate": float(next_mass),
-            "mass_semantics": "previous-route estimate; not dense coverage",
+            "mass_semantics": ("same-step dense shadow probe" if dense_probe_mass is not None
+                               else "unavailable without WAN_DENSE_MASS_PROBE=1"),
             "drop_factor": float(self.config.drop_factor),
         })
         # Keep the large, persistent route on CPU. Only the predicted boolean

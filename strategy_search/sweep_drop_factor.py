@@ -25,6 +25,8 @@ def parse_args():
     p.add_argument("--keep-outputs", action="store_true")
     p.add_argument("--no-dense-reference", action="store_true",
                    help="skip the dense baseline run")
+    p.add_argument("--no-dense-shadow-probe", action="store_true",
+                   help="do not compute dense mass probes during sparse runs")
     p.add_argument("infer_args", nargs=argparse.REMAINDER,
                    help="extra args passed to infer.py; do not include --backend/--drop-factor")
     return p.parse_args()
@@ -70,6 +72,8 @@ def main():
         cmd.extend(extra_args)
         env = os.environ.copy()
         env["WAN_SPARSE_STATS_PATH"] = str(stats_path)
+        if not args.no_dense_shadow_probe:
+            env["WAN_DENSE_MASS_PROBE"] = "1"
         print("$", " ".join(cmd), flush=True)
         completed = subprocess.run(cmd, env=env)
         if completed.returncode:
