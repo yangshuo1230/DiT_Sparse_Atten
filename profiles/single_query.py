@@ -418,7 +418,7 @@ def main():
         "--result", type=Path,
         default=Path("results/real_single_query_spatial_probe.json"))
     args = parser.parse_args()
-    run_probe(SingleQuerySpatialProbe(args.result), args)
+    run_probe(SingleQuerySpatialProbe(args.result), args, install)
 
 
 if __name__ == "__main__":

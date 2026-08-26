@@ -403,7 +403,7 @@ def main():
         default=Path("results/real_matrix_locality_probe.json"))
     args = parser.parse_args()
     run_probe(MatrixAttentionProbe(
-        args.result, tile=args.tile, query_chunk=args.query_chunk), args)
+        args.result, tile=args.tile, query_chunk=args.query_chunk), args, install)
 
 
 if __name__ == "__main__":

@@ -385,7 +385,7 @@ def main():
         mass_target=args.mass_target, expansion_radius=args.expansion_radius,
         mode=args.mode, reference_video=args.reference_video,
         candidate_video=args.video)
-    run_probe(probe, args)
+    run_probe(probe, args, install)
     # run_probe saves immediately after generation. Save once more so the
     # just-written candidate video can be decoded for final quality metrics.
     if args.reference_video:

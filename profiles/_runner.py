@@ -20,16 +20,12 @@ def add_model_args(parser):
     parser.add_argument("--video", type=Path, default=Path("results/profile.mp4"))
 
 
-def run_probe(probe, args):
+def run_probe(probe, args, installer):
     wan_repo = args.wan_repo.resolve()
     sys.path.insert(0, str(wan_repo))
     from attention_backends.dense import install as install_dense
 
     install_dense()
-    from profiles import matrix_sparsity, single_query
-    installer = (
-        single_query.install if isinstance(probe, single_query.SingleQuerySpatialProbe)
-        else matrix_sparsity.install)
     installer(probe)
     args.video.parent.mkdir(parents=True, exist_ok=True)
     sys.argv = [
