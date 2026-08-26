@@ -36,6 +36,9 @@ def parse_args():
         help="directional policy mass ratio below which a routed tile is dropped")
     parser.add_argument("--query-chunk", type=int, default=256)
     parser.add_argument("--policy", choices=("reuse", "directional", "all"), default="reuse")
+    parser.add_argument(
+        "--triton-sparse", action=argparse.BooleanOptionalAction, default=False,
+        help="use the experimental fused Triton sparse-attention output kernel")
     return parser.parse_args()
 
 
@@ -52,6 +55,7 @@ def install_backend(args):
         drop_factor=args.drop_factor,
         query_chunk=args.query_chunk,
         policy=args.policy,
+        use_triton=args.triton_sparse,
     ))
 
 

@@ -33,6 +33,10 @@ python3 infer.py --backend dense --output output-dense.mp4
 
 python3 infer.py --backend sparse --tile 64 --policy reuse \
   --output output-sparse.mp4
+
+# Experimental Triton output kernel (keeps the PyTorch route-statistics path).
+python3 infer.py --backend sparse --tile 64 --policy reuse \
+  --triton-sparse --output output-sparse-triton.mp4
 ```
 
 For sparse inference, `--tile` is a target spatial tile area rather than a

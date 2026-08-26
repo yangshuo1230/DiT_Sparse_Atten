@@ -10,6 +10,13 @@ from dataclasses import dataclass
 
 import torch
 
+try:
+    import triton
+    import triton.language as tl
+except ImportError:  # Triton is optional; the PyTorch reference path remains usable.
+    triton = None
+    tl = None
+
 from .dense import DenseBackend, install
 
 
@@ -32,6 +39,9 @@ class SparseConfig:
     # average selected mass, while preserving at least one K block per Q row.
     drop_factor: float = 0.1
     huge_factor: float = 2.0
+    # Experimental fused QK/online-softmax/PV output path. Route statistics
+    # continue to use the readable PyTorch reference implementation.
+    use_triton: bool = False
 
 
 @dataclass(frozen=True)
@@ -402,8 +412,128 @@ def _group_indices(group_mask, tile, tokens):
     return indices.flatten(1), valid_keys.flatten(1)
 
 
+if triton is not None:
+    @triton.jit
+    def _sparse_attention_kernel(
+        q_ptr, k_ptr, v_ptr, tile_ptr, valid_ptr, out_ptr,
+        tokens, query_start, heads, head_dim, value_dim, tile,
+        max_selected, score_scale,
+        stride_qt, stride_qh, stride_qd,
+        stride_kt, stride_kh, stride_kd,
+        stride_vt, stride_vh, stride_vd,
+        stride_ot, stride_oh, stride_od,
+        stride_it, stride_iv,
+        BLOCK_M: tl.constexpr, BLOCK_D: tl.constexpr,
+        BLOCK_V: tl.constexpr,
+    ):
+        """One program computes one (query tile, head) sparse attention row.
+
+        Key tiles are visited in a compact list. Online softmax lets the kernel
+        fuse QK, normalization, and PV without materializing logits/probability
+        tensors. Invalid padded entries are masked before the reduction.
+        """
+        group = tl.program_id(0)
+        query_tile = group // heads
+        head = group % heads
+        row_offsets = tl.arange(0, BLOCK_M)
+        rows = query_tile * tile + row_offsets
+        row_valid = row_offsets < tile
+        key_offsets = tl.arange(0, BLOCK_M)
+        d = tl.arange(0, BLOCK_D)
+        vd = tl.arange(0, BLOCK_V)
+        q = tl.load(
+            q_ptr + rows[:, None] * stride_qt + head * stride_qh
+            + d[None, :] * stride_qd,
+            mask=(row_valid[:, None]
+                  & (rows[:, None] < (tokens - query_start))
+                  & (d[None, :] < head_dim)),
+            other=0.0)
+        running_max = tl.full((BLOCK_M,), -float("inf"), tl.float32)
+        running_sum = tl.zeros((BLOCK_M,), tl.float32)
+        accumulator = tl.zeros((BLOCK_M, BLOCK_V), tl.float32)
+        for selected in range(0, max_selected):
+            tile_id = tl.load(
+                tile_ptr + group * stride_it + selected * stride_iv)
+            tile_valid = tl.load(
+                valid_ptr + group * stride_it + selected * stride_iv)
+            keys = tile_id * tile + key_offsets
+            k = tl.load(
+                k_ptr + keys[:, None] * stride_kt + head * stride_kh
+                + d[None, :] * stride_kd,
+                mask=(tile_valid & (keys[:, None] < tokens)
+                      & (key_offsets[:, None] < tile)
+                      & (d[None, :] < head_dim)),
+                other=0.0)
+            scores = tl.dot(q, tl.trans(k)) * score_scale
+            key_valid = tile_valid & (key_offsets < tile) & (keys < tokens)
+            scores = tl.where(key_valid[None, :], scores, -float("inf"))
+            block_max = tl.max(scores, axis=1)
+            new_max = tl.maximum(running_max, block_max)
+            old_scale = tl.exp(running_max - new_max)
+            weights = tl.exp(scores - new_max[:, None])
+            running_sum = running_sum * old_scale + tl.sum(weights, axis=1)
+            values = tl.load(
+                v_ptr + keys[:, None] * stride_vt + head * stride_vh
+                + vd[None, :] * stride_vd,
+                mask=(tile_valid & (keys[:, None] < tokens)
+                      & (key_offsets[:, None] < tile)
+                      & (vd[None, :] < value_dim)),
+                other=0.0)
+            accumulator = accumulator * old_scale[:, None] + tl.dot(
+                weights.to(values.dtype), values)
+            running_max = new_max
+        output = accumulator / running_sum[:, None]
+        tl.store(
+            out_ptr + rows[:, None] * stride_ot + head * stride_oh
+            + vd[None, :] * stride_od,
+            output,
+            mask=(row_valid[:, None]
+                  & (rows[:, None] < (tokens - query_start))
+                  & (vd[None, :] < value_dim)))
+
+
+def _triton_sparse_output(
+        q, k, v, group_mask, tile, tokens, query_start, scale=None):
+    """Run the fused kernel; return None when Triton cannot handle the shape."""
+    if triton is None or not q.is_cuda or q.shape[0] != 1:
+        return None
+    head_dim, value_dim = q.shape[-1], v.shape[-1]
+    if head_dim > 128 or value_dim > 128:
+        return None
+    padded_indices, valid_keys = _group_indices(group_mask, tile, tokens)
+    groups = padded_indices.shape[0]
+    max_selected = padded_indices.shape[1] // tile
+    # _group_indices expands each tile id to token indices; the fused kernel
+    # consumes one id and one validity bit per tile instead.
+    tile_indices = (
+        padded_indices.reshape(groups, max_selected, tile)[:, :, 0] // tile
+    ).contiguous()
+    tile_valid = valid_keys.reshape(
+        groups, max_selected, tile).any(-1).contiguous()
+    output = torch.empty(
+        (q.shape[0], q.shape[1], q.shape[2], value_dim),
+        device=q.device, dtype=q.dtype)
+    grid = (groups,)
+    block_m = max(16, triton.next_power_of_2(tile))
+    block_d = max(16, triton.next_power_of_2(head_dim))
+    block_v = max(16, triton.next_power_of_2(value_dim))
+    _sparse_attention_kernel[grid](
+        q, k, v, tile_indices, tile_valid, output,
+        tokens, query_start, q.shape[2], head_dim, value_dim, tile, max_selected,
+        scale if scale is not None else head_dim**-.5,
+        q.stride(1), q.stride(2), q.stride(3),
+        k.stride(1), k.stride(2), k.stride(3),
+        v.stride(1), v.stride(2), v.stride(3),
+        output.stride(1), output.stride(2), output.stride(3),
+        tile_indices.stride(0), tile_indices.stride(1),
+        BLOCK_M=block_m, BLOCK_D=block_d, BLOCK_V=block_v,
+        num_warps=4,
+    )
+    return output
+
+
 def sparse_chunk(q, k, v, route_mask, tile, start, end, scale,
-                 stats, token_offsets=None):
+                 stats, token_offsets=None, use_triton=False):
     """Gather all selected keys for one aligned query chunk and run attention.
 
     Each (query tile, head) is a separate batch item with its own gathered K/V
@@ -420,6 +550,10 @@ def sparse_chunk(q, k, v, route_mask, tile, start, end, scale,
     group_heads = torch.arange(heads, device=q.device).repeat(query_tiles)
     group_mask = route_mask[:, first_tile:first_tile + query_tiles]
     group_mask = group_mask.permute(1, 0, 2).reshape(query_tiles * heads, -1)
+    triton_output = None
+    if use_triton:
+        triton_output = _triton_sparse_output(
+            q_chunk, k, v, group_mask, tile, tokens, start, scale)
     padded_indices, valid_keys = _group_indices(group_mask, tile, tokens)
     selected_k = k[0, padded_indices, group_heads[:, None]].to(q.dtype)
     selected_v = v[0, padded_indices, group_heads[:, None]].to(q.dtype)
@@ -428,10 +562,13 @@ def sparse_chunk(q, k, v, route_mask, tile, start, end, scale,
     logits = logits.masked_fill(
         ~valid_keys[:, None], torch.finfo(logits.dtype).min)
     probabilities = torch.softmax(logits, -1)
-    grouped_output = probabilities.matmul(selected_v)
-    output = grouped_output.reshape(query_tiles, heads, tile, -1)
-    output = output.permute(0, 2, 1, 3).reshape(
-        1, end - start, heads, -1)
+    if triton_output is None:
+        grouped_output = probabilities.matmul(selected_v)
+        output = grouped_output.reshape(query_tiles, heads, tile, -1)
+        output = output.permute(0, 2, 1, 3).reshape(
+            1, end - start, heads, -1)
+    else:
+        output = triton_output
 
     key_mass = probabilities.sum(1).float()
     key_tiles = padded_indices // tile
@@ -537,7 +674,7 @@ class MatrixSparseBackend:
             end = min(start + chunk, tokens)
             output[:, start:end] = sparse_chunk(
                 q, k, v, route, tile, start, end, scale,
-                stats, token_offsets)
+                stats, token_offsets, use_triton=self.config.use_triton)
         normalized = stats["mass"] / tokens
         denominator = stats["mass"].clamp_min(1e-12)
         # The first dense step uses top-mass selection to bootstrap the route.
