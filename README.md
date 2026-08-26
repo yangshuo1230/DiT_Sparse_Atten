@@ -1,6 +1,6 @@
 # Wan attention study
 
-Minimal Wan2.1-T2V inference frontend with two attention backends and isolated
+Minimal Wan2.1-T2V inference frontend with pluggable attention backends and isolated
 profiling programs.
 
 ## Layout
@@ -9,6 +9,7 @@ profiling programs.
 infer.py                 single inference frontend
 attention_backends/
   dense.py               PyTorch SDPA backend
+  flex.py                minimal static-route FlexAttention backend
   sparse.py              full QxK matrix sparse reference backend
 profiles/
   gemm.py                attention-shaped GEMM benchmark
@@ -35,6 +36,9 @@ python3 infer.py --backend dense --output output-dense.mp4
 python3 infer.py --backend sparse --tile 64 --policy reuse \
   --output output-sparse.mp4
 
+python3 infer.py --backend flex_reuse --flex-block 128 \
+  --output output-flex-reuse.mp4
+
 # Experimental Triton output kernel (keeps the PyTorch route-statistics path).
 python3 infer.py --backend sparse --tile 64 --policy reuse \
   --triton-sparse --output output-sparse-triton.mp4
@@ -44,6 +48,40 @@ The fused Triton path is used for `reuse`, where no per-step centroid
 statistics are required. `directional` currently uses the PyTorch reference
 path so it does not compute attention twice; its Triton statistics fusion is a
 separate optimization task.
+
+### Minimal FlexAttention closure
+
+`flex_reuse` is a deliberately limited kernel-validation backend:
+
+1. The first denoising step computes exact dense attention and selects a
+   per-head, per-query-block top-mass route.
+2. The route is converted to a PyTorch FlexAttention `BlockMask`.
+3. Every later step for the same layer and CFG branch reuses that unchanged
+   mask. Cross-attention remains on dense SDPA.
+
+The block size is fixed to contiguous linear token groups (`128` by default),
+not the per-frame spatial HxW tiles used by the reference sparse backend.
+Sequences are padded to a block boundary only inside FlexAttention and trimmed
+afterward. `3120` tokens therefore become `3200`; `57600` is already divisible
+by `128`.
+
+Current version boundaries:
+
+- no route update, expansion, drop policy, centroid, sampled statistics, or
+  adaptive contraction after the dense bootstrap;
+- no automatic dense/Flex layer dispatch and no fixed K-count buckets yet;
+- `create_block_mask` construction and first-use compilation are part of the
+  run, but have not yet been optimized or comprehensively benchmarked;
+- the bootstrap computes chunked float32 QK to measure exact block mass and is
+  substantially slower than dense SDPA in this prototype;
+- only batch-1 global self-attention uses FlexAttention; unsupported modes and
+  all cross-attention calls fall back to dense SDPA;
+- this is a performance/correctness prototype. Its static route can accumulate
+  quality error across denoising steps and should not be treated as the final
+  sparse inference policy.
+
+Use `--no-flex-compile` only for debugging. The normal path compiles
+FlexAttention once and reuses the compiled kernel and per-layer BlockMasks.
 
 For sparse inference, `--tile` is a target spatial tile area rather than a
 linear token count. The backend reads Wan's `(F, H, W)` token grid and chooses

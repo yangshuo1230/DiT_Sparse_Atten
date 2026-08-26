@@ -14,7 +14,8 @@ DEFAULT_PROMPT = "A small white dog running on a beach at sunset"
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backend", choices=("dense", "sparse"), default="dense")
+    parser.add_argument(
+        "--backend", choices=("dense", "sparse", "flex_reuse"), default="dense")
     parser.add_argument("--wan-repo", type=Path, default=Path("/root/Wan2.1"))
     parser.add_argument("--model-dir", type=Path, default=Path("/root/.cache/wan2.1-14b"))
     parser.add_argument("--output", type=Path, default=Path("output.mp4"))
@@ -42,6 +43,12 @@ def parse_args():
     parser.add_argument(
         "--route-prefetch", action=argparse.BooleanOptionalAction, default=True,
         help="prefetch the next sparse route on a separate CUDA stream")
+    parser.add_argument(
+        "--flex-block", type=int, default=128,
+        help="fixed linear token block used by the flex_reuse backend")
+    parser.add_argument(
+        "--flex-compile", action=argparse.BooleanOptionalAction, default=True,
+        help="compile the FlexAttention output kernel")
     return parser.parse_args()
 
 
@@ -49,6 +56,16 @@ def install_backend(args):
     if args.backend == "dense":
         from attention_backends.dense import install
         return install()
+
+    if args.backend == "flex_reuse":
+        from attention_backends.flex import FlexReuseConfig, install_flex_reuse
+        return install_flex_reuse(FlexReuseConfig(
+            block_size=args.flex_block,
+            keep=args.keep,
+            mass_target=args.mass_target,
+            query_chunk=args.query_chunk,
+            compile_kernel=args.flex_compile,
+        ))
 
     from attention_backends.sparse import SparseConfig, install_sparse
     return install_sparse(SparseConfig(
