@@ -24,7 +24,9 @@ python3 strategy_search/sweep_drop_factor.py \
 ```
 
 每个 `drop_factor` 会生成一个 JSONL 文件，并在
-`strategy_search/results/drop_factor_summary.json` 汇总。`route_mass_fraction`
-是基于上一轮 attention mass 的路由覆盖率估计；`executed_tile_fraction`
+`strategy_search/results/drop_factor_summary.json` 汇总。首个 dense step 的
+`route_mass_fraction` 是真实 dense attention mass 覆盖率；后续 sparse step
+该字段为 `null`，避免把 sparse softmax 的重新归一化结果误当成 dense coverage。
+`executed_tile_fraction`
 是当前 step 实际执行的矩阵 tile 比例；`next_*` 是丢弃低质量 tile 后下一
 step 的预测值。
