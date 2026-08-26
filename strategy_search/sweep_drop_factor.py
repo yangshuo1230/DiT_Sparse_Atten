@@ -59,7 +59,9 @@ def main():
             by_step.setdefault(step, []).append(row)
         step_summary = []
         for step, values in sorted(by_step.items(), key=lambda item: int(item[0])):
-            mean = lambda key: sum(float(v[key]) for v in values) / len(values)
+            def mean(key):
+                valid = [float(v[key]) for v in values if v.get(key) is not None]
+                return sum(valid) / len(valid) if valid else None
             step_summary.append({"step": int(step), "calls": len(values),
                                  "executed_tile_fraction": mean("executed_tile_fraction"),
                                  "route_mass_fraction": mean("route_mass_fraction"),

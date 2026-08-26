@@ -690,9 +690,14 @@ class MatrixSparseBackend:
             "branch": int(branch), "phase": "sparse",
             "tile_count": int(tiles),
             "executed_tile_fraction": float(route.float().mean().item()),
-            "route_mass_fraction": float(route_mass),
+            # Sparse softmax renormalizes over selected keys, so this is not
+            # comparable to dense attention mass. Keep it separately labeled.
+            "route_mass_fraction": None,
+            "previous_route_mass_estimate": float(route_mass),
             "next_tile_fraction": float(next_mask.float().mean().item()),
-            "next_route_mass_fraction": float(next_mass),
+            "next_route_mass_fraction": None,
+            "next_previous_mass_estimate": float(next_mass),
+            "mass_semantics": "previous-route estimate; not dense coverage",
             "drop_factor": float(self.config.drop_factor),
         })
         # Keep the large, persistent route on CPU. Only the predicted boolean
