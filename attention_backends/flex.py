@@ -18,6 +18,13 @@ import torch.nn.functional as F
 from .dense import DenseBackend, install
 
 try:
+    import triton
+    import triton.language as tl
+except ImportError:  # Flex remains importable; exact GPU mass needs Triton.
+    triton = None
+    tl = None
+
+try:
     from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 except ImportError:  # Kept importable on older PyTorch installations.
     create_block_mask = None
@@ -29,7 +36,6 @@ class FlexReuseConfig:
     block_size: int = 128
     keep: float = 0.625
     mass_target: float = 0.90
-    query_chunk: int = 256
     compile_kernel: bool = True
 
 
@@ -57,42 +63,132 @@ def _top_mass_route(mass, target, keep):
 
 
 @torch.no_grad()
-def _dense_bootstrap(q, k, v, block_size, query_chunk, mass_target, keep,
-                     scale=None):
+def _reference_block_mass(q, k, lse, block_size, scale):
+    """Small CPU/reference implementation used when Triton is unavailable."""
+    tokens, heads, head_dim = q.shape[1:]
+    blocks = math.ceil(tokens / block_size)
+    scores = torch.einsum(
+        "bqhd,bkhd->bhqk", q.float(), k.float()) * scale
+    probabilities = torch.exp(scores - lse.float().unsqueeze(-1))[0]
+    padding = blocks * block_size - tokens
+    probabilities = F.pad(probabilities, (0, padding, 0, padding))
+    return probabilities.reshape(
+        heads, blocks, block_size, blocks, block_size).sum((2, 4))
+
+
+if triton is not None:
+    @triton.jit
+    def _exact_block_mass_kernel(
+        q_ptr, k_ptr, lse_ptr, mass_ptr,
+        tokens, head_dim, route_blocks, score_scale,
+        stride_qt, stride_qh, stride_qd,
+        stride_kt, stride_kh, stride_kd,
+        stride_lh, stride_lt,
+        BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr,
+        BLOCK_D: tl.constexpr, ROUTE_BLOCK: tl.constexpr,
+    ):
+        """Compute exact dense probability mass for one 128x64 QK tile."""
+        pair = tl.program_id(0)
+        head = tl.program_id(1)
+        key_micro_blocks = tl.cdiv(tokens, BLOCK_N)
+        query_block = pair // key_micro_blocks
+        key_micro_block = pair % key_micro_blocks
+
+        query_offsets = query_block * BLOCK_M + tl.arange(0, BLOCK_M)
+        key_offsets = key_micro_block * BLOCK_N + tl.arange(0, BLOCK_N)
+        dimensions = tl.arange(0, BLOCK_D)
+        query_valid = query_offsets < tokens
+        key_valid = key_offsets < tokens
+
+        query = tl.load(
+            q_ptr + query_offsets[:, None] * stride_qt + head * stride_qh
+            + dimensions[None, :] * stride_qd,
+            mask=query_valid[:, None] & (dimensions[None, :] < head_dim),
+            other=0.0,
+        )
+        key = tl.load(
+            k_ptr + key_offsets[:, None] * stride_kt + head * stride_kh
+            + dimensions[None, :] * stride_kd,
+            mask=key_valid[:, None] & (dimensions[None, :] < head_dim),
+            other=0.0,
+        )
+        scores = tl.dot(query, tl.trans(key)) * score_scale
+        lse = tl.load(
+            lse_ptr + head * stride_lh + query_offsets * stride_lt,
+            mask=query_valid,
+            other=float("inf"),
+        )
+        probabilities = tl.exp(scores - lse[:, None])
+        probabilities = tl.where(
+            query_valid[:, None] & key_valid[None, :], probabilities, 0.0)
+        partial_mass = tl.sum(tl.sum(probabilities, axis=1), axis=0)
+
+        key_route_block = (key_micro_block * BLOCK_N) // ROUTE_BLOCK
+        output_offset = (
+            head * route_blocks * route_blocks
+            + query_block * route_blocks
+            + key_route_block
+        )
+        tl.atomic_add(mass_ptr + output_offset, partial_mass)
+
+
+@torch.no_grad()
+def _block_attention_mass(q, k, lse, block_size, scale=None):
+    """Recover exact dense block mass from Q, K, and per-query logsumexp.
+
+    The GPU path recomputes QK once with tensor-core tiles, normalizes each
+    score with the LSE returned by dense FlexAttention, and writes only one
+    scalar per 128x128 route block. No probability tensor is materialized.
+    """
+    if q.shape[0] != 1 or q.shape[1] != k.shape[1]:
+        raise ValueError("Flex bootstrap supports batch-1 self-attention")
+    tokens, heads, head_dim = q.shape[1:]
+    blocks = math.ceil(tokens / block_size)
+    score_scale = scale if scale is not None else head_dim**-0.5
+    if triton is None or not q.is_cuda:
+        return _reference_block_mass(
+            q, k, lse, block_size, score_scale)
+    if block_size != 128:
+        raise ValueError("The exact Triton mass kernel currently requires block_size=128")
+
+    mass = torch.zeros((heads, blocks, blocks), device=q.device)
+    block_m, block_n = 128, 64
+    key_micro_blocks = triton.cdiv(tokens, block_n)
+    grid = (blocks * key_micro_blocks, heads)
+    _exact_block_mass_kernel[grid](
+        q, k, lse, mass,
+        tokens, head_dim, blocks, score_scale,
+        q.stride(1), q.stride(2), q.stride(3),
+        k.stride(1), k.stride(2), k.stride(3),
+        lse.stride(1), lse.stride(2),
+        BLOCK_M=block_m,
+        BLOCK_N=block_n,
+        BLOCK_D=max(16, triton.next_power_of_2(head_dim)),
+        ROUTE_BLOCK=block_size,
+        num_warps=8,
+    )
+    return mass
+
+
+@torch.no_grad()
+def _dense_bootstrap(q, k, v, block_size, mass_target, keep,
+                     compile_kernel, scale=None):
     """Return exact dense output and its block-quantized top-mass route."""
     if q.shape[0] != 1 or q.shape[1] != k.shape[1]:
         raise ValueError("Flex bootstrap supports batch-1 self-attention")
 
-    tokens, heads, head_dim = q.shape[1:]
-    blocks = math.ceil(tokens / block_size)
-    padded_tokens = blocks * block_size
-    mass = torch.zeros((heads, blocks, blocks), device=q.device)
-    output = torch.empty(
-        (1, tokens, heads, v.shape[-1]), device=q.device, dtype=q.dtype)
+    output, lse = _flex_kernel(compile_kernel)(
+        q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2),
+        scale=scale,
+        return_lse=True,
+    )
+    mass = _block_attention_mass(
+        q, k, lse, block_size, scale=scale)
 
-    k_float = k.float()
-    v_float = v[0].permute(1, 0, 2).float()
-    score_scale = scale if scale is not None else head_dim**-0.5
-    query_chunk = max(block_size, query_chunk // block_size * block_size)
-
-    for start in range(0, tokens, query_chunk):
-        end = min(start + query_chunk, tokens)
-        scores = torch.einsum(
-            "bqhd,bkhd->bhqk", q[:, start:end].float(), k_float)
-        probabilities = (scores * score_scale).softmax(-1)[0]
-        chunk_output = probabilities.matmul(v_float)
-        output[:, start:end] = chunk_output.permute(1, 0, 2).unsqueeze(0).to(q.dtype)
-
-        query_blocks = math.ceil((end - start) / block_size)
-        padded = F.pad(
-            probabilities,
-            (0, padded_tokens - tokens,
-             0, query_blocks * block_size - (end - start)))
-        shape = (heads, query_blocks, block_size, blocks, block_size)
-        destination = slice(start // block_size, start // block_size + query_blocks)
-        mass[:, destination] = padded.reshape(shape).sum((2, 4))
-
-    return output, _top_mass_route(mass, mass_target, keep)
+    return (
+        output.transpose(1, 2).contiguous(),
+        _top_mass_route(mass, mass_target, keep),
+    )
 
 
 def _build_block_mask(route, tokens, block_size):
@@ -223,9 +319,9 @@ class FlexReuseBackend:
             output, route = _dense_bootstrap(
                 q, k, v,
                 block_size=self.config.block_size,
-                query_chunk=self.config.query_chunk,
                 mass_target=self.config.mass_target,
                 keep=self.config.keep,
+                compile_kernel=self.config.compile_kernel,
                 scale=softmax_scale,
             )
             self.state[key] = {

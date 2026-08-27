@@ -1,0 +1,32 @@
+{
+  "model": "Wan-AI/Wan2.1-T2V-14B",
+  "resolution": "1280x720",
+  "output_frames": 61,
+  "attention_tokens": 57600,
+  "denoising_steps": 2,
+  "flex_block_size": 128,
+  "keep": 0.5,
+  "mass_target": 0.9,
+  "dense_reference": {
+    "denoising_seconds": 162.7852070259978,
+    "mean_step_seconds": 81.3926035129989
+  },
+  "flex_lse_exact_mass": {
+    "denoising_seconds": 241.70492752204882,
+    "bootstrap_step_seconds_approx": 178.23,
+    "reuse_step_seconds_approx": 63.47492752204883,
+    "reuse_step_speedup_vs_dense": 1.2822795817250228,
+    "two_step_speedup_vs_dense": 0.6734873330670853
+  },
+  "single_attention_microbenchmark": {
+    "dense_flex_with_lse_seconds_including_shape_compile": 4.846676548011601,
+    "exact_block_mass_seconds": 0.7491803190205246,
+    "route_selection_seconds": 0.03136051999172196
+  },
+  "mass_check": {
+    "expected_sum_per_head": 57600.0,
+    "measured_mean_sum_per_head": 57600.0078125
+  },
+  "decode_status": "Both denoising steps completed; the later VAE decode failed in the device convolution engine.",
+  "note": "The reuse step is faster than dense, but the exact second-QK bootstrap makes this two-step run slower overall."
+}

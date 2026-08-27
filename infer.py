@@ -63,7 +63,6 @@ def install_backend(args):
             block_size=args.flex_block,
             keep=args.keep,
             mass_target=args.mass_target,
-            query_chunk=args.query_chunk,
             compile_kernel=args.flex_compile,
         ))
 

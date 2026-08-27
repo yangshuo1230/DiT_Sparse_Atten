@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from attention_backends.flex import (
+    _block_attention_mass,
     _build_block_mask,
     _dense_bootstrap,
     _flex_output,
@@ -16,6 +17,45 @@ def test_top_mass_route_respects_row_cap():
     assert route.tolist() == [[[True, True, False, False]]]
 
 
+def test_reference_block_mass_matches_explicit_softmax():
+    torch.manual_seed(2)
+    tokens, heads, head_dim, block = 259, 3, 16, 128
+    q = torch.randn(1, tokens, heads, head_dim)
+    k = torch.randn_like(q)
+
+    scores = torch.einsum("bqhd,bkhd->bhqk", q, k) * head_dim**-0.5
+    lse = scores.logsumexp(-1)
+    actual = _block_attention_mass(q, k, lse, block_size=block)
+    probabilities = scores.softmax(-1)[0]
+    padded = torch.nn.functional.pad(probabilities, (0, 125, 0, 125))
+    expected = padded.reshape(heads, 3, block, 3, block).sum((2, 4))
+
+    torch.testing.assert_close(actual, expected, atol=2e-5, rtol=2e-5)
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="Triton exact-mass kernel requires CUDA",
+)
+def test_triton_block_mass_matches_explicit_softmax():
+    torch.manual_seed(3)
+    tokens, heads, head_dim, block = 250, 2, 32, 128
+    q = torch.randn(1, tokens, heads, head_dim, device="cuda", dtype=torch.bfloat16)
+    k = torch.randn_like(q)
+
+    scores = (
+        q.transpose(1, 2).float()
+        @ k.transpose(1, 2).float().transpose(-1, -2)
+    ) * head_dim**-0.5
+    lse = scores.logsumexp(-1)
+    actual = _block_attention_mass(q, k, lse, block_size=block)
+    probabilities = scores.softmax(-1)[0]
+    padded = torch.nn.functional.pad(probabilities, (0, 6, 0, 6))
+    expected = padded.reshape(heads, 2, block, 2, block).sum((2, 4))
+
+    torch.testing.assert_close(actual, expected, atol=2e-5, rtol=2e-5)
+
+
 @pytest.mark.skipif(
     not torch.cuda.is_available() or flex_attention is None,
     reason="FlexAttention CUDA support is required",
@@ -27,8 +67,8 @@ def test_dense_bootstrap_matches_sdpa_with_partial_last_block():
     v = torch.randn_like(q)
 
     output, route = _dense_bootstrap(
-        q, k, v, block_size=128, query_chunk=256,
-        mass_target=0.90, keep=0.625)
+        q, k, v, block_size=128, mass_target=0.90, keep=0.625,
+        compile_kernel=False)
     reference = torch.nn.functional.scaled_dot_product_attention(
         q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2),
     ).transpose(1, 2)

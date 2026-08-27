@@ -53,10 +53,13 @@ separate optimization task.
 
 `flex_reuse` is a deliberately limited kernel-validation backend:
 
-1. The first denoising step computes exact dense attention and selects a
-   per-head, per-query-block top-mass route.
-2. The route is converted to a PyTorch FlexAttention `BlockMask`.
-3. Every later step for the same layer and CFG branch reuses that unchanged
+1. The first denoising step runs dense FlexAttention once to obtain the normal
+   output and each query's log-sum-exp (LSE).
+2. A second exact Triton QK pass uses that LSE to reduce probabilities directly
+   into 128x128 block mass without materializing an attention matrix.
+3. The per-head, per-query-block top-mass route is converted to a PyTorch
+   FlexAttention `BlockMask`.
+4. Every later step for the same layer and CFG branch reuses that unchanged
    mask. Cross-attention remains on dense SDPA.
 
 The block size is fixed to contiguous linear token groups (`128` by default),
@@ -72,8 +75,10 @@ Current version boundaries:
 - no automatic dense/Flex layer dispatch and no fixed K-count buckets yet;
 - `create_block_mask` construction and first-use compilation are part of the
   run, but have not yet been optimized or comprehensively benchmarked;
-- the bootstrap computes chunked float32 QK to measure exact block mass and is
-  substantially slower than dense SDPA in this prototype;
+- bootstrap route mass is exact (up to normal kernel floating-point error) and
+  uses no sampling, but it still pays for a second full QK pass;
+- the exact-mass path currently requires CUDA/Triton and 128-token route
+  blocks; its two 128x64 subtiles use atomic addition to form each block mass;
 - only batch-1 global self-attention uses FlexAttention; unsupported modes and
   all cross-attention calls fall back to dense SDPA;
 - this is a performance/correctness prototype. Its static route can accumulate
@@ -82,6 +87,20 @@ Current version boundaries:
 
 Use `--no-flex-compile` only for debugging. The normal path compiles
 FlexAttention once and reuses the compiled kernel and per-layer BlockMasks.
+
+Measured validation on the current PPU environment:
+
+- 3,120 tokens, two denoising steps: exact bootstrap `6.07 s`, reused Flex step
+  about `2.10 s`; the previous explicit-probability bootstrap took `129.9 s`.
+- 57,600 tokens, 50% keep: exact bootstrap `178.2 s`, reused Flex step about
+  `63.5 s`, versus dense `81.4 s/step`. The reused kernel is about `1.28x`
+  faster, while a two-step run remains slower overall because of bootstrap.
+
+The 57K validation completed both denoising steps; its subsequent VAE decode
+failed in the device convolution engine, after timing had already been saved.
+These numbers establish the attention path only and are not yet a production
+end-to-end speedup claim. The compact record is in
+`results/flex_lse_57k_summary.json`.
 
 For sparse inference, `--tile` is a target spatial tile area rather than a
 linear token count. The backend reads Wan's `(F, H, W)` token grid and chooses
