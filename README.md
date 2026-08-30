@@ -39,15 +39,18 @@ python3 infer.py --backend sparse --tile 64 --policy reuse \
 python3 infer.py --backend flex_reuse --flex-block 128 \
   --output output-flex-reuse.mp4
 
-# Experimental Triton output kernel (keeps the PyTorch route-statistics path).
-python3 infer.py --backend sparse --tile 64 --policy reuse \
+# Experimental Triton output and route-statistics kernels.
+python3 infer.py --backend sparse --tile 64 --policy directional \
   --triton-sparse --output output-sparse-triton.mp4
 ```
 
-The fused Triton path is used for `reuse`, where no per-step centroid
-statistics are required. `directional` currently uses the PyTorch reference
-path so it does not compute attention twice; its Triton statistics fusion is a
-separate optimization task.
+The fused Triton path is used for both `reuse` and `directional`. The output
+kernel writes each query's online-softmax max and sum; a second Triton kernel
+recomputes QK once and uses that state to emit tile mass and Q/K centroids.
+Compared with the PyTorch reference path, the synthetic 57,600-token
+directional benchmark improves from about 8.41 seconds to 4.04 seconds
+(about 2.08x) at 62.5% keep. Correctness is covered by
+`tests/test_sparse_triton_stats.py`.
 
 ### Minimal FlexAttention closure
 

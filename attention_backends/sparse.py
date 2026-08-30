@@ -418,7 +418,8 @@ if triton is not None:
     @triton.jit
     def _sparse_attention_kernel(
         q_ptr, k_ptr, v_ptr, tile_ptr, valid_ptr, out_ptr,
-        tokens, query_start, heads, head_dim, value_dim, tile,
+        max_ptr, sum_ptr,
+        tokens, query_start, q_rows, heads, head_dim, value_dim, tile,
         max_selected, score_scale,
         stride_qt, stride_qh, stride_qd,
         stride_kt, stride_kh, stride_kd,
@@ -492,36 +493,143 @@ if triton is not None:
             mask=(row_valid[:, None]
                   & (rows[:, None] < (tokens - query_start))
                   & (vd[None, :] < value_dim)))
+        tl.store(
+            max_ptr + head * q_rows + rows,
+            running_max,
+            mask=row_valid & (rows < (tokens - query_start)))
+        tl.store(
+            sum_ptr + head * q_rows + rows,
+            running_sum,
+            mask=row_valid & (rows < (tokens - query_start)))
+
+
+    @triton.jit
+    def _sparse_stats_kernel(
+        q_ptr, k_ptr, tile_ptr, valid_ptr, max_ptr, sum_ptr,
+        mass_ptr, q_y_ptr, q_x_ptr, k_y_ptr, k_x_ptr,
+        q_y_coords_ptr, q_x_coords_ptr, k_y_coords_ptr, k_x_coords_ptr,
+        tokens, query_start, q_rows, heads, head_dim, key_tile,
+        max_selected, score_scale, route_tiles,
+        stride_qt, stride_qh, stride_qd,
+        stride_kt, stride_kh, stride_kd,
+        stride_it, stride_iv,
+        BLOCK_M: tl.constexpr, BLOCK_D: tl.constexpr,
+    ):
+        """Accumulate route statistics with final softmax normalization."""
+        group = tl.program_id(0)
+        query_tile = group // heads
+        head = group % heads
+        row_offsets = tl.arange(0, BLOCK_M)
+        rows = query_tile * key_tile + row_offsets
+        row_valid = row_offsets < key_tile
+        key_offsets = tl.arange(0, BLOCK_M)
+        dimensions = tl.arange(0, BLOCK_D)
+        q = tl.load(
+            q_ptr + rows[:, None] * stride_qt + head * stride_qh
+            + dimensions[None, :] * stride_qd,
+            mask=(row_valid[:, None]
+                  & (rows[:, None] < q_rows)
+                  & (dimensions[None, :] < head_dim)),
+            other=0.0)
+        q_y = tl.load(
+            q_y_coords_ptr + rows,
+            mask=row_valid & (rows < q_rows),
+            other=0.0)
+        q_x = tl.load(
+            q_x_coords_ptr + rows,
+            mask=row_valid & (rows < q_rows),
+            other=0.0)
+        row_max = tl.load(
+            max_ptr + head * q_rows + rows,
+            mask=row_valid & (rows < q_rows),
+            other=0.0)
+        row_sum = tl.load(
+            sum_ptr + head * q_rows + rows,
+            mask=row_valid & (rows < q_rows),
+            other=0.0)
+        for selected in range(0, max_selected):
+            tile_id = tl.load(
+                tile_ptr + group * stride_it + selected * stride_iv)
+            tile_valid = tl.load(
+                valid_ptr + group * stride_it + selected * stride_iv)
+            keys = tile_id * key_tile + key_offsets
+            k = tl.load(
+                k_ptr + keys[:, None] * stride_kt + head * stride_kh
+                + dimensions[None, :] * stride_kd,
+                mask=(tile_valid & (keys[:, None] < tokens)
+                      & (key_offsets[:, None] < key_tile)
+                      & (dimensions[None, :] < head_dim)),
+                other=0.0)
+            scores = tl.dot(q, tl.trans(k)) * score_scale
+            key_valid = tile_valid & (key_offsets < key_tile) & (keys < tokens)
+            scores = tl.where(key_valid[None, :], scores, -float("inf"))
+            probabilities = tl.where(
+                key_valid[None, :] & row_valid[:, None],
+                tl.exp(scores - row_max[:, None]) / row_sum[:, None],
+                0.0,
+            )
+            tile_mass = tl.sum(probabilities, axis=0)
+            tile_q_y = tl.sum(probabilities * q_y[:, None], axis=0)
+            tile_q_x = tl.sum(probabilities * q_x[:, None], axis=0)
+            tile_k_y = tl.sum(probabilities * tl.load(
+                k_y_coords_ptr + keys, mask=key_valid, other=0.0)[None, :], axis=0)
+            tile_k_x = tl.sum(probabilities * tl.load(
+                k_x_coords_ptr + keys, mask=key_valid, other=0.0)[None, :], axis=0)
+            if tile_valid:
+                stats_offset = (
+                    head * route_tiles * route_tiles
+                    + query_tile * route_tiles + tile_id)
+                tl.atomic_add(mass_ptr + stats_offset, tl.sum(tile_mass))
+                tl.atomic_add(q_y_ptr + stats_offset, tl.sum(tile_q_y))
+                tl.atomic_add(q_x_ptr + stats_offset, tl.sum(tile_q_x))
+                tl.atomic_add(k_y_ptr + stats_offset, tl.sum(tile_k_y))
+                tl.atomic_add(k_x_ptr + stats_offset, tl.sum(tile_k_x))
+
+
+def _triton_sparse_layout(group_mask, tile, tokens):
+    """Build the compact tile list shared by output and statistics kernels."""
+    padded_indices, valid_keys = _group_indices(group_mask, tile, tokens)
+    groups = padded_indices.shape[0]
+    max_selected = padded_indices.shape[1] // tile
+    tile_indices = (
+        padded_indices.reshape(groups, max_selected, tile)[:, :, 0] // tile
+    ).contiguous()
+    tile_valid = valid_keys.reshape(
+        groups, max_selected, tile).any(-1).contiguous()
+    return tile_indices, tile_valid
 
 
 def _triton_sparse_output(
-        q, k, v, group_mask, tile, tokens, query_start, scale=None):
+        q, k, v, group_mask, tile, tokens, query_start, scale=None,
+        softmax_state=None):
     """Run the fused kernel; return None when Triton cannot handle the shape."""
     if triton is None or not q.is_cuda or q.shape[0] != 1:
         return None
     head_dim, value_dim = q.shape[-1], v.shape[-1]
     if head_dim > 128 or value_dim > 128:
         return None
-    padded_indices, valid_keys = _group_indices(group_mask, tile, tokens)
-    groups = padded_indices.shape[0]
-    max_selected = padded_indices.shape[1] // tile
-    # _group_indices expands each tile id to token indices; the fused kernel
-    # consumes one id and one validity bit per tile instead.
-    tile_indices = (
-        padded_indices.reshape(groups, max_selected, tile)[:, :, 0] // tile
-    ).contiguous()
-    tile_valid = valid_keys.reshape(
-        groups, max_selected, tile).any(-1).contiguous()
+    tile_indices, tile_valid = _triton_sparse_layout(group_mask, tile, tokens)
+    groups = tile_indices.shape[0]
+    max_selected = tile_indices.shape[1]
     output = torch.empty(
         (q.shape[0], q.shape[1], q.shape[2], value_dim),
         device=q.device, dtype=q.dtype)
+    softmax_state = softmax_state if softmax_state is not None else {}
+    softmax_state["max"] = torch.empty(
+        (q.shape[2], q.shape[1]),
+        device=q.device, dtype=torch.float32)
+    softmax_state["sum"] = torch.empty(
+        (q.shape[2], q.shape[1]),
+        device=q.device, dtype=torch.float32)
     grid = (groups,)
     block_m = max(16, triton.next_power_of_2(tile))
     block_d = max(16, triton.next_power_of_2(head_dim))
     block_v = max(16, triton.next_power_of_2(value_dim))
     _sparse_attention_kernel[grid](
         q, k, v, tile_indices, tile_valid, output,
-        tokens, query_start, q.shape[2], head_dim, value_dim, tile, max_selected,
+        softmax_state["max"], softmax_state["sum"],
+        tokens, query_start, q.shape[1], q.shape[2], head_dim, value_dim,
+        tile, max_selected,
         scale if scale is not None else head_dim**-.5,
         q.stride(1), q.stride(2), q.stride(3),
         k.stride(1), k.stride(2), k.stride(3),
@@ -532,6 +640,39 @@ def _triton_sparse_output(
         num_warps=4,
     )
     return output
+
+
+def _triton_sparse_stats(
+        q, k, group_mask, tile, tokens, query_start, stats,
+        token_offsets, softmax_state, scale=None):
+    """Accumulate route statistics using the output kernel's softmax state."""
+    if triton is None or not q.is_cuda or q.shape[0] != 1:
+        return False
+    head_dim = q.shape[-1]
+    if head_dim > 128:
+        return False
+    tile_indices, tile_valid = _triton_sparse_layout(group_mask, tile, tokens)
+    groups, max_selected = tile_indices.shape
+    heads, route_tiles = stats["mass"].shape[0], stats["mass"].shape[-1]
+    q_y, q_x = (offset[query_start:query_start + q.shape[1]].contiguous()
+                for offset in token_offsets)
+    k_y, k_x = (offset.contiguous() for offset in token_offsets)
+    block_m = max(16, triton.next_power_of_2(tile))
+    block_d = max(16, triton.next_power_of_2(head_dim))
+    _sparse_stats_kernel[(groups,)](
+        q, k, tile_indices, tile_valid,
+        softmax_state["max"], softmax_state["sum"],
+        stats["mass"], stats["q_y"], stats["q_x"],
+        stats["k_y"], stats["k_x"], q_y, q_x, k_y, k_x,
+        tokens, 0, q.shape[1], heads, head_dim, tile, max_selected,
+        scale if scale is not None else head_dim**-.5, route_tiles,
+        q.stride(1), q.stride(2), q.stride(3),
+        k.stride(1), k.stride(2), k.stride(3),
+        tile_indices.stride(0), tile_indices.stride(1),
+        BLOCK_M=block_m, BLOCK_D=block_d,
+        num_warps=4,
+    )
+    return True
 
 
 def sparse_chunk(q, k, v, route_mask, tile, start, end, scale,
@@ -554,10 +695,17 @@ def sparse_chunk(q, k, v, route_mask, tile, start, end, scale,
     group_mask = route_mask[:, first_tile:first_tile + query_tiles]
     group_mask = group_mask.permute(1, 0, 2).reshape(query_tiles * heads, -1)
     triton_output = None
+    triton_stats = False
     if use_triton:
+        softmax_state = {} if collect_stats else None
         triton_output = _triton_sparse_output(
-            q_chunk, k, v, group_mask, tile, tokens, start, scale)
-    if triton_output is not None and not collect_stats:
+            q_chunk, k, v, group_mask, tile, tokens, start, scale,
+            softmax_state=softmax_state)
+        if triton_output is not None and collect_stats:
+            triton_stats = _triton_sparse_stats(
+                q_chunk, k, group_mask, tile, tokens, start, stats,
+                token_offsets, softmax_state, scale)
+    if triton_output is not None and (not collect_stats or triton_stats):
         return triton_output
     padded_indices, valid_keys = _group_indices(group_mask, tile, tokens)
     selected_k = k[0, padded_indices, group_heads[:, None]].to(q.dtype)
@@ -691,7 +839,8 @@ class MatrixSparseBackend:
                 previous, self.config.policy, self.config.centroid_threshold,
                 self.config.huge_factor, layout).to(q.device)
         tiles = route.shape[-1]
-        fused_reuse = self.config.use_triton and self.config.policy == "reuse"
+        fused_route = self.config.use_triton and self.config.policy in (
+            "reuse", "directional")
         stats = _empty_route_stats(heads, tiles, q.device)
         # Write chunks directly into their final positions. Keeping a list and
         # concatenating it would require another full output-sized allocation.
@@ -706,11 +855,11 @@ class MatrixSparseBackend:
             end = min(start + chunk, tokens)
             output[:, start:end] = sparse_chunk(
                 q, k, v, route, tile, start, end, scale,
-                stats, token_offsets, use_triton=fused_reuse,
-                collect_stats=not fused_reuse)
-        if fused_reuse:
+                stats, token_offsets, use_triton=fused_route,
+                collect_stats=self.config.policy != "reuse")
+        if self.config.policy == "reuse":
             # Reuse has no centroid update. Apply the fixed drop threshold to
-            # the previous route mass and avoid recomputing QK/softmax in PyTorch.
+            # the previous route mass and avoid recomputing QK/softmax.
             next_mask = _drop_low_mass(
                 route.cpu(), previous["mass"], self.config.drop_factor)
             normalized = previous["mass"].to(q.device)
@@ -721,7 +870,7 @@ class MatrixSparseBackend:
         # The first dense step uses top-mass selection to bootstrap the route.
         # Later steps retain the route actually executed this step and contract
         # it only through the explicit low-mass drop policy.
-        if not fused_reuse:
+        if self.config.policy != "reuse":
             next_mask = _drop_low_mass(
                 route, normalized, self.config.drop_factor)
         next_mask_device = (next_mask.to(q.device)
@@ -777,7 +926,7 @@ class MatrixSparseBackend:
         if device_mask is not None:
             next_state["prefetched_mask"] = device_mask
             next_state["prefetched_event"] = ready
-        if fused_reuse:
+        if self.config.policy == "reuse":
             next_state["mass"] = previous["mass"]
             for name in ("centroid_q_y", "centroid_q_x", "centroid_k_y", "centroid_k_x"):
                 next_state[name] = previous[name]
