@@ -138,6 +138,7 @@ Common options:
 ## Profiles
 
 ```bash
+python3 -m profiles.frontend.cli
 python3 -m profiles.gemm
 python3 -m profiles.decision
 python3 -m profiles.kernel --tokens 3648
@@ -146,6 +147,14 @@ python3 -m profiles.hotspot_evolution --frames 5 --steps 5 --mode observe
 python3 -m profiles.single_query --frames 5 --steps 5
 python3 -m profiles.heatmap
 ```
+
+The unified benchmark is split into a CLI/report frontend
+(`profiles/frontend/cli.py`) and measurement backends:
+`profiles/backend/comparison.py` for dense/PyTorch-sparse/Triton-sparse timing
+and quality, `profiles/backend/metrics.py` for numerical errors, and
+`profiles/backend/timing.py` for CUDA timing and memory. Its current report is
+`results/sparse_attention_profile.json`; the condensed interpretation is
+`results/sparse_attention_profile_summary.json`.
 
 The real-model profilers use dense SDPA and save only bounded aggregate data.
 They do not write full QK or attention tensors. Profilers share one attention

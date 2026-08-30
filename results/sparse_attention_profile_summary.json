@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "summary": {
+    "dense_seconds": {
+      "3600": 0.00303,
+      "14400": 0.04381,
+      "57600": 0.67681
+    },
+    "pytorch_sparse_seconds": {
+      "3600": 0.0405,
+      "14400": 0.5641,
+      "57600": 8.39656
+    },
+    "triton_sparse_seconds": {
+      "3600": 0.0264,
+      "14400": 0.28623,
+      "57600": 4.03849
+    },
+    "triton_vs_pytorch": {
+      "3600": 1.53,
+      "14400": 1.97,
+      "57600": 2.08
+    },
+    "triton_vs_dense": {
+      "3600": 0.115,
+      "14400": 0.153,
+      "57600": 0.168
+    },
+    "quality_relative_l2_vs_dense": {
+      "3600": 0.73565,
+      "14400": 0.74709,
+      "57600": 0.74543
+    },
+    "quality_cosine_vs_dense": {
+      "3600": 0.81503,
+      "14400": 0.81158,
+      "57600": 0.81229
+    },
+    "triton_vs_pytorch_relative_l2": {
+      "3600": 0.00632,
+      "14400": 0.00638,
+      "57600": 0.00639
+    }
+  },
+  "stage_profile_57600": {
+    "one_chunk_triton_output_seconds": 0.00621,
+    "one_chunk_triton_statistics_seconds": 0.01084,
+    "compact_tile_list_seconds": 0.000323,
+    "interpretation": "Statistics pass is the largest Triton component; metadata is negligible."
+  },
+  "bottlenecks": [
+    "Dense SDPA is 5.97x faster than the current Triton sparse path at 57,600 tokens.",
+    "The two-pass Triton design pays QK twice: output online-softmax plus statistics recomputation.",
+    "Statistics kernel is about 1.74x the output kernel cost per 240-token chunk at 57,600 tokens.",
+    "Sparse output quality error versus dense is large (relative L2 about 0.745), reflecting selected-route approximation rather than Triton numerics.",
+    "Triton and PyTorch sparse outputs agree closely (relative L2 about 0.0064), so the kernel is numerically consistent."
+  ],
+  "advantages": [
+    "Triton directional is 2.08x faster than PyTorch directional at 57,600 tokens.",
+    "Triton statistics match PyTorch statistics within about 0.06% mass error and about 1.4% centroid error.",
+    "Route metadata construction is no longer a meaningful bottleneck."
+  ],
+  "limitations": [
+    "Still substantially slower than dense SDPA because dense cuDNN/Flash kernels are much better optimized.",
+    "Second QK pass doubles compute and memory traffic for directional statistics.",
+    "Synthetic quality uses random Q/K/V, so relative error is an upper-bound-style diagnostic; video quality requires the existing real-model VBench/SSIM/PSNR pipeline."
+  ]
+}

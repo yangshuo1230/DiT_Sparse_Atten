@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "device": "cuda",
+  "configuration": {
+    "tokens": [
+      3600,
+      14400,
+      57600
+    ],
+    "heads": 40,
+    "head_dim": 128,
+    "tile": 64,
+    "keep": 0.625,
+    "query_chunk": 240,
+    "repeats": 2,
+    "warmup": 1,
+    "output": "results/sparse_attention_profile.json"
+  },
+  "cases": [
+    {
+      "tokens": 3600,
+      "heads": 40,
+      "head_dim": 128,
+      "tile_tokens": 60,
+      "tile_shape": [
+        6,
+        10
+      ],
+      "keep_fraction": 0.6333333253860474,
+      "dense_seconds": 0.0030287379631772637,
+      "pytorch_sparse_seconds": 0.040496434026863426,
+      "triton_sparse_seconds": 0.026401968498248607,
+      "triton_speedup_vs_pytorch": 1.5338414644934444,
+      "triton_speedup_vs_dense": 0.11471636909869722,
+      "pytorch_speedup_vs_dense": 0.07479023859651794,
+      "peak_allocated_gib": 0.8088011741638184,
+      "quality": {
+        "dense_bootstrap_vs_sdpa": {
+          "relative_l2": 0.0024536519777029753,
+          "max_absolute_error": 0.0009765625,
+          "cosine_similarity": 0.999997079372406
+        },
+        "pytorch_sparse_vs_sdpa": {
+          "relative_l2": 0.7356925010681152,
+          "max_absolute_error": 0.16552734375,
+          "cosine_similarity": 0.8150165677070618
+        },
+        "triton_sparse_vs_sdpa": {
+          "relative_l2": 0.735651433467865,
+          "max_absolute_error": 0.1650390625,
+          "cosine_similarity": 0.8150289058685303
+        },
+        "triton_vs_pytorch": {
+          "relative_l2": 0.006323494482785463,
+          "max_absolute_error": 0.0078125,
+          "cosine_similarity": 0.999980092048645
+        }
+      }
+    },
+    {
+      "tokens": 14400,
+      "heads": 40,
+      "head_dim": 128,
+      "tile_tokens": 60,
+      "tile_shape": [
+        6,
+        10
+      ],
+      "keep_fraction": 0.625,
+      "dense_seconds": 0.043814093980472535,
+      "pytorch_sparse_seconds": 0.5641039559850469,
+      "triton_sparse_seconds": 0.286227909498848,
+      "triton_speedup_vs_pytorch": 1.9708209341734975,
+      "triton_speedup_vs_dense": 0.15307415009663436,
+      "pytorch_speedup_vs_dense": 0.07767024768327266,
+      "peak_allocated_gib": 3.218132972717285,
+      "quality": {
+        "dense_bootstrap_vs_sdpa": {
+          "relative_l2": 0.002496447879821062,
+          "max_absolute_error": 0.00048828125,
+          "cosine_similarity": 0.9999969005584717
+        },
+        "pytorch_sparse_vs_sdpa": {
+          "relative_l2": 0.7471288442611694,
+          "max_absolute_error": 0.062744140625,
+          "cosine_similarity": 0.8115637302398682
+        },
+        "triton_sparse_vs_sdpa": {
+          "relative_l2": 0.747085690498352,
+          "max_absolute_error": 0.062744140625,
+          "cosine_similarity": 0.8115754723548889
+        },
+        "triton_vs_pytorch": {
+          "relative_l2": 0.006379963364452124,
+          "max_absolute_error": 0.0029296875,
+          "cosine_similarity": 0.9999797344207764
+        }
+      }
+    },
+    {
+      "tokens": 57600,
+      "heads": 40,
+      "head_dim": 128,
+      "tile_tokens": 60,
+      "tile_shape": [
+        6,
+        10
+      ],
+      "keep_fraction": 0.625,
+      "dense_seconds": 0.6768125824746676,
+      "pytorch_sparse_seconds": 8.396558632492088,
+      "triton_sparse_seconds": 4.0384862960199825,
+      "triton_speedup_vs_pytorch": 2.079135105835838,
+      "triton_speedup_vs_dense": 0.16759065968397152,
+      "pytorch_speedup_vs_dense": 0.08060594966318844,
+      "peak_allocated_gib": 13.338258743286133,
+      "quality": {
+        "dense_bootstrap_vs_sdpa": {
+          "relative_l2": 0.002554570324718952,
+          "max_absolute_error": 0.000244140625,
+          "cosine_similarity": 0.9999967813491821
+        },
+        "pytorch_sparse_vs_sdpa": {
+          "relative_l2": 0.7454743981361389,
+          "max_absolute_error": 0.03240966796875,
+          "cosine_similarity": 0.8122754096984863
+        },
+        "triton_sparse_vs_sdpa": {
+          "relative_l2": 0.7454319000244141,
+          "max_absolute_error": 0.03240966796875,
+          "cosine_similarity": 0.8122875690460205
+        },
+        "triton_vs_pytorch": {
+          "relative_l2": 0.006393184885382652,
+          "max_absolute_error": 0.00146484375,
+          "cosine_similarity": 0.9999796748161316
+        }
+      }
+    }
+  ]
+}
