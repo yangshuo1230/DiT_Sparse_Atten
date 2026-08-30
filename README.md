@@ -44,6 +44,14 @@ python3 infer.py --backend sparse --tile 64 --policy directional \
   --triton-sparse --output output-sparse-triton.mp4
 ```
 
+`flex_reuse` can now periodically refresh its exact top-mass route instead of
+keeping the first-step mask forever. `--flex-update-interval 1` updates every
+denoising step, while larger values amortize the `BlockMask` construction
+cost. On the synthetic 57,600-token benchmark, later-step averages are about
+`1.90 s` at interval 1, `1.10 s` at interval 2, and `0.81 s` at interval 5
+with 50% keep. Larger intervals trade route freshness for speed; the historical
+fully-static behavior remains available with a very large interval.
+
 The fused Triton path is used for both `reuse` and `directional`. The output
 kernel writes each query's online-softmax max and sum; a second Triton kernel
 recomputes QK once and uses that state to emit tile mass and Q/K centroids.

@@ -49,6 +49,9 @@ def parse_args():
     parser.add_argument(
         "--flex-compile", action=argparse.BooleanOptionalAction, default=True,
         help="compile the FlexAttention output kernel")
+    parser.add_argument(
+        "--flex-update-interval", type=int, default=1,
+        help="recompute the Flex route every N denoising steps")
     return parser.parse_args()
 
 
@@ -64,6 +67,7 @@ def install_backend(args):
             keep=args.keep,
             mass_target=args.mass_target,
             compile_kernel=args.flex_compile,
+            update_interval=args.flex_update_interval,
         ))
 
     from attention_backends.sparse import SparseConfig, install_sparse

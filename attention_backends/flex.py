@@ -37,6 +37,9 @@ class FlexReuseConfig:
     keep: float = 0.625
     mass_target: float = 0.90
     compile_kernel: bool = True
+    # Update the route only every N denoising steps. The value 1 preserves the
+    # historical fully-static behavior; larger values amortize BlockMask cost.
+    update_interval: int = 1
 
 
 def _routing_context():
@@ -328,12 +331,32 @@ class FlexReuseBackend:
                 "route": route,
                 "block_mask": _build_block_mask(
                     route, q.shape[1], self.config.block_size),
+                "step": step,
             }
             return output.to(output_dtype)
 
+        state = self.state[key]
+        if (step - state["step"]) >= self.config.update_interval:
+            output, lse = _flex_kernel(self.config.compile_kernel)(
+                q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2),
+                scale=softmax_scale,
+                return_lse=True,
+            )
+            mass = _block_attention_mass(
+                q, k, lse, self.config.block_size, scale=softmax_scale)
+            route = _top_mass_route(
+                mass, self.config.mass_target, self.config.keep)
+            state.update({
+                "route": route,
+                "block_mask": _build_block_mask(
+                    route, q.shape[1], self.config.block_size),
+                "step": step,
+            })
+            return output.transpose(1, 2).contiguous().to(output_dtype)
+
         output = _flex_output(
             q, k, v,
-            self.state[key]["block_mask"],
+            state["block_mask"],
             self.config.block_size,
             self.config.compile_kernel,
             scale=softmax_scale,
