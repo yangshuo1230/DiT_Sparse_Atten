@@ -20,6 +20,35 @@ def add_model_args(parser):
     parser.add_argument("--video", type=Path, default=Path("results/profile.mp4"))
 
 
+def install_probe(attention_hook, forward_hook):
+    """Patch all Wan attention call sites and wrap model forward.
+
+    Profilers previously duplicated this code independently. Keeping it in one
+    place ensures both the attention module and WanModel module are patched,
+    preserves the original attention callable for hooks, and makes future
+    call-site changes a single edit.
+    """
+    import wan.modules.attention as attention_module
+    import wan.modules.model as model_module
+
+    original_attention = attention_module.flash_attention
+    original_forward = model_module.WanModel.forward
+
+    def wrapped_attention(*args, **kwargs):
+        return attention_hook(original_attention, model_module, args, kwargs)
+
+    def wrapped_forward(instance, *args, **kwargs):
+        timestep = kwargs.get("t", args[1] if len(args) > 1 else None)
+        if timestep is not None:
+            forward_hook(timestep)
+        return original_forward(instance, *args, **kwargs)
+
+    attention_module.flash_attention = wrapped_attention
+    model_module.flash_attention = wrapped_attention
+    model_module.WanModel.forward = wrapped_forward
+    return original_attention
+
+
 def run_probe(probe, args, installer):
     wan_repo = args.wan_repo.resolve()
     sys.path.insert(0, str(wan_repo))

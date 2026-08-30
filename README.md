@@ -145,7 +145,10 @@ python3 -m profiles.heatmap
 ```
 
 The real-model profilers use dense SDPA and save only bounded aggregate data.
-They do not write full QK or attention tensors.
+They do not write full QK or attention tensors. Profilers share one attention
+and forward installation helper (`profiles._runner.install_probe`), so all Wan
+attention call sites and the timestep hook stay synchronized; the shared
+behavior is covered by `tests/test_profiler_runner.py`.
 
 To test whether important tiles appear suddenly outside the previous route,
 first generate a same-seed dense reference and then run the counterfactual

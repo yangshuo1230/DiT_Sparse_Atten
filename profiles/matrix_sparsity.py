@@ -366,30 +366,16 @@ class MatrixAttentionProbe:
 
 
 def install(probe):
-    import wan.modules.attention as attention_module
-    import wan.modules.model as model_module
+    from profiles._runner import install_probe
 
-    original_attention = attention_module.flash_attention
-    original_forward = model_module.WanModel.forward
-
-    def wrapped_attention(*args, **kwargs):
+    def attention_hook(original_attention, model_module, args, kwargs):
         q = kwargs.get("q", args[0] if args else None)
         k = kwargs.get("k", args[1] if len(args) > 1 else None)
         if q is not None and k is not None:
             probe.record(q, k, getattr(model_module, "_CURRENT_ATTN_ID", -1))
         return original_attention(*args, **kwargs)
 
-    def wrapped_forward(instance, *args, **kwargs):
-        timestep = kwargs.get("t", args[1] if len(args) > 1 else None)
-        if timestep is not None:
-            probe.begin_forward(timestep)
-        return original_forward(instance, *args, **kwargs)
-
-    attention_module.flash_attention = wrapped_attention
-    model_module.flash_attention = wrapped_attention
-    model_module.WanModel.forward = wrapped_forward
-    return original_attention
-
+    return install_probe(attention_hook, probe.begin_forward)
 
 def main():
     from profiles._runner import add_model_args, run_probe
