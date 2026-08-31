@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import math
+from functools import partial
 
 import torch
 
@@ -48,11 +48,11 @@ def run_comparison(tokens, heads, head_dim, tile, keep, query_chunk,
     reset_memory_stats()
     device = "cuda"
     generator = torch.Generator(device=device).manual_seed(0)
-    q, k, v = (
+    q, k, v = [
         torch.randn((1, tokens, heads, head_dim), device=device,
                     dtype=torch.bfloat16, generator=generator)
         for _ in range(3)
-    )
+    ]
     layout = _spatial_layout(_grid_for_tokens(tokens), tile, tokens)
     if layout is None:
         raise ValueError(f"No exact spatial layout exists for {tokens} tokens")
@@ -67,14 +67,11 @@ def run_comparison(tokens, heads, head_dim, tile, keep, query_chunk,
     triton_output, triton_stats = _sparse_output(
         q, k, v, route_mask, layout, query_chunk, scale, True)
 
-    def run_dense():
-        _dense_output(q, k, v, scale)
-
-    def run_pytorch():
-        _sparse_output(q, k, v, route_mask, layout, query_chunk, scale, False)
-
-    def run_triton():
-        _sparse_output(q, k, v, route_mask, layout, query_chunk, scale, True)
+    run_dense = partial(_dense_output, q, k, v, scale)
+    run_pytorch = partial(
+        _sparse_output, q, k, v, route_mask, layout, query_chunk, scale, False)
+    run_triton = partial(
+        _sparse_output, q, k, v, route_mask, layout, query_chunk, scale, True)
 
     dense_seconds = timed(run_dense, repeats, warmup)
     pytorch_seconds = timed(run_pytorch, repeats, warmup)
@@ -101,6 +98,7 @@ def run_comparison(tokens, heads, head_dim, tile, keep, query_chunk,
             "triton_vs_pytorch": summarize(triton_output, pytorch_output),
         },
     }
+    del run_dense, run_pytorch, run_triton
     del q, k, v, route, route_mask, dense_reference, dense_sdpa
     del pytorch_output, pytorch_stats, triton_output, triton_stats
     reset_memory_stats()
@@ -109,21 +107,20 @@ def run_comparison(tokens, heads, head_dim, tile, keep, query_chunk,
 
 def profile_stages(tokens, heads, head_dim, tile, keep, query_chunk, **_):
     """Measure route metadata, output, and statistics stages separately."""
-    from profiles.backend.timing import reset_memory_stats, timed
-
     from attention_backends.sparse import (
         _group_indices,
         _triton_sparse_layout,
     )
+    from profiles.backend.timing import reset_memory_stats, timed
 
     reset_memory_stats()
     device = "cuda"
     generator = torch.Generator(device=device).manual_seed(0)
-    q, k, v = (
+    q, k, v = [
         torch.randn((1, tokens, heads, head_dim), device=device,
                     dtype=torch.bfloat16, generator=generator)
         for _ in range(3)
-    )
+    ]
     layout = _spatial_layout(_grid_for_tokens(tokens), tile, tokens)
     scale = head_dim**-0.5
     route, _ = _dense_route(q, k, v, layout, query_chunk, .90, keep, scale)

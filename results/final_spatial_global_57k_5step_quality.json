@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "comparison": {
+    "reference": "/root/wan-attention-study/results/final_dense_57k_5step.mp4",
+    "candidate": "/root/wan-attention-study/results/final_spatial_global_57k_5step.mp4",
+    "method": "frame-aligned decoded RGB in [0,1]; skimage SSIM and RGB MSE PSNR",
+    "size": "1280*720",
+    "denoising_steps": 5,
+    "seed": 0,
+    "prompt": "A small white dog running on a beach at sunset"
+  },
+  "metrics": {
+    "frames": 61,
+    "mean_psnr": 27.651709930839946,
+    "mean_ssim": 0.8507204309838717,
+    "psnr_quantiles": {
+      "p10": 26.76387158236423,
+      "p50": 27.731438007946135,
+      "p90": 28.40459891818158
+    },
+    "ssim_quantiles": {
+      "p10": 0.8303322196006775,
+      "p50": 0.851433277130127,
+      "p90": 0.8716172575950623
+    }
+  }
+}

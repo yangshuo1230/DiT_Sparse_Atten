@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import argparse
+import json
 import runpy
 import sys
 from pathlib import Path
@@ -53,9 +53,19 @@ def run_probe(probe, args, installer):
     wan_repo = args.wan_repo.resolve()
     sys.path.insert(0, str(wan_repo))
     from attention_backends.dense import install as install_dense
+    from profiles.provenance import collect
 
     install_dense()
     installer(probe)
+    original_save = probe.save
+
+    def save_with_provenance():
+        original_save()
+        payload = json.loads(probe.path.read_text())
+        payload["run"] = collect(args, wan_repo)
+        probe.path.write_text(json.dumps(payload, indent=2) + "\n")
+
+    probe.save = save_with_provenance
     args.video.parent.mkdir(parents=True, exist_ok=True)
     sys.argv = [
         str(wan_repo / "generate.py"),

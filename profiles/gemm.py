@@ -18,7 +18,7 @@ def measure(batch, m, n, head_dim, repeats):
     end = torch.cuda.Event(enable_timing=True)
     start.record()
     for _ in range(repeats):
-        output = torch.bmm(q, k)
+        _output = torch.bmm(q, k)
     end.record()
     torch.cuda.synchronize()
     milliseconds = start.elapsed_time(end) / repeats

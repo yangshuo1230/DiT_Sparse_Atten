@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import argparse
+import json
 import math
 import os
 from collections import defaultdict

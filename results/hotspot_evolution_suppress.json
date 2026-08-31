@@ -1,0 +1,867 @@
+{
+  "schema_version": 1,
+  "hypotheses": {
+    "h1": "Few oracle-route tiles appear outside the dilated previous oracle route.",
+    "h2": "Suppressing all such tiles has little effect on attention outputs and final video."
+  },
+  "config": {
+    "mode": "suppress",
+    "target_spatial_tile_tokens": 64,
+    "actual_spatial_tile_shape": [
+      5,
+      13
+    ],
+    "spatial_neighbourhood_radius": 1,
+    "mass_target": 0.9,
+    "query_chunk": 256,
+    "sudden_hotspot_definition": "current per-query-tile oracle route member outside the backend's coupled Q/K spatial dilation of the previous-step oracle route",
+    "intervention": "attention is restricted to the dilated previous oracle route",
+    "speed_note": "Dense QK is retained for oracle measurement; timings are not speed results."
+  },
+  "calls": {
+    "self_attention": 1200,
+    "cross_attention_skipped": 1200
+  },
+  "per_transition": [
+    {
+      "from_step": 0,
+      "to_step": 1,
+      "mean_sudden_oracle_tile_fraction": 0.02837670172756134,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.0034602077212184668,
+        "p50": 0.016511868685483932,
+        "p90": 0.06189751252532005
+      },
+      "mean_sudden_dense_mass_fraction": 0.008950025296064723,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0010426982771605253,
+        "p50": 0.005275400821119547,
+        "p90": 0.019295964390039444
+      },
+      "mean_all_mass_outside_prediction": 0.04164289291541081,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.012776989489793777,
+        "p50": 0.03821093589067459,
+        "p90": 0.07074925303459167
+      },
+      "mean_oracle_route_recall": 0.9716232982836663,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9382102489471436,
+        "p50": 0.9834983348846436,
+        "p90": 0.9965452551841736
+      },
+      "mean_predicted_tile_fraction": 0.7077279848913895,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.30092594027519226,
+        "p50": 0.7860725522041321,
+        "p90": 0.9691358208656311
+      },
+      "mean_oracle_mass_covered": 0.9049193675071001,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.902987003326416,
+        "p50": 0.9036586284637451,
+        "p90": 0.9066291451454163
+      },
+      "mean_attention_output_relative_l2": 0.062173536978662014,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.04234582558274269,
+        "p50": 0.05630035325884819,
+        "p90": 0.10532048344612122
+      },
+      "mean_attention_output_cosine_similarity": 0.9979809202253819,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9951299428939819,
+        "p50": 0.9985877275466919,
+        "p90": 0.999205470085144
+      },
+      "mean_attention_output_max_absolute_error": 1.824456787109375,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 0.9765625,
+        "p50": 1.5731201171875,
+        "p90": 3.0
+      }
+    },
+    {
+      "from_step": 1,
+      "to_step": 2,
+      "mean_sudden_oracle_tile_fraction": 0.02676067563235847,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.005280140787363052,
+        "p50": 0.019780807197093964,
+        "p90": 0.0555555559694767
+      },
+      "mean_sudden_dense_mass_fraction": 0.008135345424655042,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0012513271067291498,
+        "p50": 0.005778948310762644,
+        "p90": 0.016520773991942406
+      },
+      "mean_all_mass_outside_prediction": 0.04509154157451121,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.022032510489225388,
+        "p50": 0.04486646503210068,
+        "p90": 0.06668679416179657
+      },
+      "mean_oracle_route_recall": 0.9732393242046237,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9444444179534912,
+        "p50": 0.9802431464195251,
+        "p90": 0.9947368502616882
+      },
+      "mean_predicted_tile_fraction": 0.654911627099209,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.27064043283462524,
+        "p50": 0.7033178806304932,
+        "p90": 0.9376928806304932
+      },
+      "mean_oracle_mass_covered": 0.9051255322061479,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9029664993286133,
+        "p50": 0.9036521911621094,
+        "p90": 0.9073299169540405
+      },
+      "mean_attention_output_relative_l2": 0.0629512651823461,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.051156509667634964,
+        "p50": 0.05903336778283119,
+        "p90": 0.07723276317119598
+      },
+      "mean_attention_output_cosine_similarity": 0.9981416516005993,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9973153471946716,
+        "p50": 0.9984745979309082,
+        "p90": 0.9988300800323486
+      },
+      "mean_attention_output_max_absolute_error": 2.080653762817383,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.1630859375,
+        "p50": 1.802734375,
+        "p90": 3.564453125
+      }
+    },
+    {
+      "from_step": 2,
+      "to_step": 3,
+      "mean_sudden_oracle_tile_fraction": 0.020078969791370582,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.0036465036682784557,
+        "p50": 0.014344261959195137,
+        "p90": 0.04410012066364288
+      },
+      "mean_sudden_dense_mass_fraction": 0.005455302176025043,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0008166626212187111,
+        "p50": 0.003636118955910206,
+        "p90": 0.01173887588083744
+      },
+      "mean_all_mass_outside_prediction": 0.0475367432134226,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.027129726484417915,
+        "p50": 0.04876494035124779,
+        "p90": 0.06541968137025833
+      },
+      "mean_oracle_route_recall": 0.9799210308864713,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9559255838394165,
+        "p50": 0.9856817722320557,
+        "p90": 0.9963737726211548
+      },
+      "mean_predicted_tile_fraction": 0.6174034288350958,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.2364969104528427,
+        "p50": 0.6568287014961243,
+        "p90": 0.9176311492919922
+      },
+      "mean_oracle_mass_covered": 0.9052958784624934,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9029746651649475,
+        "p50": 0.9036811590194702,
+        "p90": 0.9078017473220825
+      },
+      "mean_attention_output_relative_l2": 0.06371873058378696,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.05106797814369202,
+        "p50": 0.05961780622601509,
+        "p90": 0.07881778478622437
+      },
+      "mean_attention_output_cosine_similarity": 0.9980886042118072,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9974721670150757,
+        "p50": 0.9984844923019409,
+        "p90": 0.9988822937011719
+      },
+      "mean_attention_output_max_absolute_error": 2.266184616088867,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.421875,
+        "p50": 1.921875,
+        "p90": 4.296875
+      }
+    },
+    {
+      "from_step": 3,
+      "to_step": 4,
+      "mean_sudden_oracle_tile_fraction": 0.00931859015020109,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.001754386001266539,
+        "p50": 0.007092198356986046,
+        "p90": 0.019266394898295403
+      },
+      "mean_sudden_dense_mass_fraction": 0.0021994943981530923,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.00038523459807038307,
+        "p50": 0.001592493150383234,
+        "p90": 0.004578612744808197
+      },
+      "mean_all_mass_outside_prediction": 0.04416755111487873,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.027060149237513542,
+        "p50": 0.045145343989133835,
+        "p90": 0.05965434014797211
+      },
+      "mean_oracle_route_recall": 0.9906814098544419,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9807555079460144,
+        "p50": 0.9929107427597046,
+        "p90": 0.9982486963272095
+      },
+      "mean_predicted_tile_fraction": 0.6079320386558539,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.22511574625968933,
+        "p50": 0.6537423133850098,
+        "p90": 0.9087576866149902
+      },
+      "mean_oracle_mass_covered": 0.9054734773933888,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.903009295463562,
+        "p50": 0.9037267565727234,
+        "p90": 0.9081549048423767
+      },
+      "mean_attention_output_relative_l2": 0.059856033651158214,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.047593437135219574,
+        "p50": 0.05513036623597145,
+        "p90": 0.08011409640312195
+      },
+      "mean_attention_output_cosine_similarity": 0.9983004100620747,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9974639415740967,
+        "p50": 0.9987276196479797,
+        "p90": 0.999057948589325
+      },
+      "mean_attention_output_max_absolute_error": 2.281389331817627,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.3125,
+        "p50": 2.0037841796875,
+        "p90": 3.947265625
+      }
+    },
+    {
+      "from_step": 4,
+      "to_step": 5,
+      "mean_sudden_oracle_tile_fraction": 0.019976854878887024,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.002944888547062874,
+        "p50": 0.012111637741327286,
+        "p90": 0.04558204859495163
+      },
+      "mean_sudden_dense_mass_fraction": 0.005322937631063951,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.000558772764634341,
+        "p50": 0.002830356592312455,
+        "p90": 0.01264890469610691
+      },
+      "mean_all_mass_outside_prediction": 0.04836628094868502,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.030860140919685364,
+        "p50": 0.048024989664554596,
+        "p90": 0.06547091901302338
+      },
+      "mean_oracle_route_recall": 0.9800231453962625,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9544316530227661,
+        "p50": 0.9878923892974854,
+        "p90": 0.9970566630363464
+      },
+      "mean_predicted_tile_fraction": 0.5839501353225205,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.2096836417913437,
+        "p50": 0.6190200448036194,
+        "p90": 0.8939043283462524
+      },
+      "mean_oracle_mass_covered": 0.9056530115380883,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.903035044670105,
+        "p50": 0.9038025140762329,
+        "p90": 0.9086657762527466
+      },
+      "mean_attention_output_relative_l2": 0.06410966273397208,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.05056462436914444,
+        "p50": 0.05930611118674278,
+        "p90": 0.08137498795986176
+      },
+      "mean_attention_output_cosine_similarity": 0.9980922259390355,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9970222115516663,
+        "p50": 0.998526394367218,
+        "p90": 0.9989146590232849
+      },
+      "mean_attention_output_max_absolute_error": 2.4992706298828127,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.3828125,
+        "p50": 2.26416015625,
+        "p90": 4.140625
+      }
+    },
+    {
+      "from_step": 5,
+      "to_step": 6,
+      "mean_sudden_oracle_tile_fraction": 0.028528271550567297,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.0047846888191998005,
+        "p50": 0.015536300837993622,
+        "p90": 0.06807131320238113
+      },
+      "mean_sudden_dense_mass_fraction": 0.008487277894653289,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0009817524114623666,
+        "p50": 0.0036656255833804607,
+        "p90": 0.01862110197544098
+      },
+      "mean_all_mass_outside_prediction": 0.051677858680923235,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.031180690973997116,
+        "p50": 0.04938460886478424,
+        "p90": 0.07140356302261353
+      },
+      "mean_oracle_route_recall": 0.971471728887409,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9319419264793396,
+        "p50": 0.9844695925712585,
+        "p90": 0.9952224493026733
+      },
+      "mean_predicted_tile_fraction": 0.5633749276553863,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.1930941343307495,
+        "p50": 0.5827546119689941,
+        "p90": 0.8877314925193787
+      },
+      "mean_oracle_mass_covered": 0.9059012346155941,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9030957818031311,
+        "p50": 0.9039220809936523,
+        "p90": 0.9091836214065552
+      },
+      "mean_attention_output_relative_l2": 0.06417337716557085,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.04960642009973526,
+        "p50": 0.06173284724354744,
+        "p90": 0.08311007916927338
+      },
+      "mean_attention_output_cosine_similarity": 0.998101956397295,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.996978223323822,
+        "p50": 0.9984238743782043,
+        "p90": 0.9989578723907471
+      },
+      "mean_attention_output_max_absolute_error": 2.4959396362304687,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.458984375,
+        "p50": 2.265625,
+        "p90": 3.796875
+      }
+    },
+    {
+      "from_step": 6,
+      "to_step": 7,
+      "mean_sudden_oracle_tile_fraction": 0.04165014729585891,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.006179196760058403,
+        "p50": 0.029177719727158546,
+        "p90": 0.09454545378684998
+      },
+      "mean_sudden_dense_mass_fraction": 0.012022207691960602,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0010742079466581345,
+        "p50": 0.007477001287043095,
+        "p90": 0.030027437955141068
+      },
+      "mean_all_mass_outside_prediction": 0.0571767170442763,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.03671621158719063,
+        "p50": 0.05506577342748642,
+        "p90": 0.08054112643003464
+      },
+      "mean_oracle_route_recall": 0.9583498523384333,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9054956436157227,
+        "p50": 0.9708333611488342,
+        "p90": 0.993842363357544
+      },
+      "mean_predicted_tile_fraction": 0.5453697670757538,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.18036265671253204,
+        "p50": 0.5634645223617554,
+        "p90": 0.8724923133850098
+      },
+      "mean_oracle_mass_covered": 0.9061279241368174,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9030573964118958,
+        "p50": 0.9040313959121704,
+        "p90": 0.9097800850868225
+      },
+      "mean_attention_output_relative_l2": 0.06973679438233375,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.05970896780490875,
+        "p50": 0.06673076003789902,
+        "p90": 0.0853457823395729
+      },
+      "mean_attention_output_cosine_similarity": 0.9978631854057312,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.996951162815094,
+        "p50": 0.9981234669685364,
+        "p90": 0.9985227584838867
+      },
+      "mean_attention_output_max_absolute_error": 2.7012996673583984,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.64453125,
+        "p50": 2.3828125,
+        "p90": 3.9609375
+      }
+    },
+    {
+      "from_step": 7,
+      "to_step": 8,
+      "mean_sudden_oracle_tile_fraction": 0.03806874646718825,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.0069444444961845875,
+        "p50": 0.025715956464409828,
+        "p90": 0.08448927849531174
+      },
+      "mean_sudden_dense_mass_fraction": 0.01114420678595593,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.001508149434812367,
+        "p50": 0.00642683869227767,
+        "p90": 0.025042861700057983
+      },
+      "mean_all_mass_outside_prediction": 0.05419218155453564,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.030452726408839226,
+        "p50": 0.053074486553668976,
+        "p90": 0.07514823973178864
+      },
+      "mean_oracle_route_recall": 0.9619312538206577,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9155987501144409,
+        "p50": 0.9742857217788696,
+        "p90": 0.9930875301361084
+      },
+      "mean_predicted_tile_fraction": 0.5386912855607807,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.16203702986240387,
+        "p50": 0.553626537322998,
+        "p90": 0.8871527910232544
+      },
+      "mean_oracle_mass_covered": 0.9064152598753572,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9031462669372559,
+        "p50": 0.9041584134101868,
+        "p90": 0.910216212272644
+      },
+      "mean_attention_output_relative_l2": 0.068001595325768,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.0559263713657856,
+        "p50": 0.06665415316820145,
+        "p90": 0.08432597666978836
+      },
+      "mean_attention_output_cosine_similarity": 0.9979655109345913,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9972484111785889,
+        "p50": 0.99814772605896,
+        "p90": 0.9986870288848877
+      },
+      "mean_attention_output_max_absolute_error": 2.8469833374023437,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.765625,
+        "p50": 2.64453125,
+        "p90": 3.609375
+      }
+    },
+    {
+      "from_step": 8,
+      "to_step": 9,
+      "mean_sudden_oracle_tile_fraction": 0.0359454170889785,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.0046701692044734955,
+        "p50": 0.025303110480308533,
+        "p90": 0.0825747698545456
+      },
+      "mean_sudden_dense_mass_fraction": 0.009358436321474529,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0009138071909546852,
+        "p50": 0.005862189456820488,
+        "p90": 0.02222875878214836
+      },
+      "mean_all_mass_outside_prediction": 0.057183793220847295,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.03722546249628067,
+        "p50": 0.057609640061855316,
+        "p90": 0.07715185731649399
+      },
+      "mean_oracle_route_recall": 0.9640545830130577,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.917479395866394,
+        "p50": 0.9747037887573242,
+        "p90": 0.9953917264938354
+      },
+      "mean_predicted_tile_fraction": 0.5204592256245086,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.14988425374031067,
+        "p50": 0.529321014881134,
+        "p90": 0.8736497163772583
+      },
+      "mean_oracle_mass_covered": 0.9065046048536897,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9031157493591309,
+        "p50": 0.9041224122047424,
+        "p90": 0.9105499982833862
+      },
+      "mean_attention_output_relative_l2": 0.0716731071472168,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.06361301988363266,
+        "p50": 0.07047292590141296,
+        "p90": 0.07978885620832443
+      },
+      "mean_attention_output_cosine_similarity": 0.9978400453925133,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9972877502441406,
+        "p50": 0.99806147813797,
+        "p90": 0.9984222650527954
+      },
+      "mean_attention_output_max_absolute_error": 2.960326623916626,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.5703125,
+        "p50": 2.8125,
+        "p90": 3.960693359375
+      }
+    },
+    {
+      "from_step": 9,
+      "to_step": 10,
+      "mean_sudden_oracle_tile_fraction": 0.019093502950181574,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.003576751099899411,
+        "p50": 0.01256281416863203,
+        "p90": 0.04182156175374985
+      },
+      "mean_sudden_dense_mass_fraction": 0.0048765047541382955,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0006369660841301084,
+        "p50": 0.0027233881410211325,
+        "p90": 0.00965389795601368
+      },
+      "mean_all_mass_outside_prediction": 0.05002624375968935,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.031960222870111465,
+        "p50": 0.051077090203762054,
+        "p90": 0.06634831428527832
+      },
+      "mean_oracle_route_recall": 0.9809064966812729,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9583078026771545,
+        "p50": 0.9874401688575745,
+        "p90": 0.9964253902435303
+      },
+      "mean_predicted_tile_fraction": 0.5221616992927739,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.14506173133850098,
+        "p50": 0.533178985118866,
+        "p90": 0.8740354776382446
+      },
+      "mean_oracle_mass_covered": 0.9068024314194918,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9031700491905212,
+        "p50": 0.9042588472366333,
+        "p90": 0.9111742973327637
+      },
+      "mean_attention_output_relative_l2": 0.06340981512330472,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.052912019193172455,
+        "p50": 0.061249058693647385,
+        "p90": 0.07302726805210114
+      },
+      "mean_attention_output_cosine_similarity": 0.9982492923736572,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9977144598960876,
+        "p50": 0.9985595941543579,
+        "p90": 0.9988692998886108
+      },
+      "mean_attention_output_max_absolute_error": 2.9787673950195312,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.66748046875,
+        "p50": 2.552734375,
+        "p90": 4.59765625
+      }
+    },
+    {
+      "from_step": 10,
+      "to_step": 11,
+      "mean_sudden_oracle_tile_fraction": 0.02286111783691922,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.004068522714078426,
+        "p50": 0.01701570674777031,
+        "p90": 0.04997192695736885
+      },
+      "mean_sudden_dense_mass_fraction": 0.005455788574995495,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0006536314613185823,
+        "p50": 0.003754923352971673,
+        "p90": 0.01165405847132206
+      },
+      "mean_all_mass_outside_prediction": 0.052328874666636695,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.03518072888255119,
+        "p50": 0.05406355857849121,
+        "p90": 0.06763582676649094
+      },
+      "mean_oracle_route_recall": 0.9771388826519251,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.950106143951416,
+        "p50": 0.9829959273338318,
+        "p90": 0.99593585729599
+      },
+      "mean_predicted_tile_fraction": 0.5079843029822223,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.1371527761220932,
+        "p50": 0.5079089403152466,
+        "p90": 0.8721064925193787
+      },
+      "mean_oracle_mass_covered": 0.906973751205951,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9031324982643127,
+        "p50": 0.9042908549308777,
+        "p90": 0.911641538143158
+      },
+      "mean_attention_output_relative_l2": 0.06545381043106317,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.05641147121787071,
+        "p50": 0.06326587498188019,
+        "p90": 0.07443344593048096
+      },
+      "mean_attention_output_cosine_similarity": 0.9981581799685955,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9976972937583923,
+        "p50": 0.998419463634491,
+        "p90": 0.9987843632698059
+      },
+      "mean_attention_output_max_absolute_error": 3.08074951171875,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.44921875,
+        "p50": 2.33935546875,
+        "p90": 5.6484375
+      }
+    },
+    {
+      "from_step": 11,
+      "to_step": 12,
+      "mean_sudden_oracle_tile_fraction": 0.01513384373779445,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.002870263997465372,
+        "p50": 0.010995051823556423,
+        "p90": 0.03307560086250305
+      },
+      "mean_sudden_dense_mass_fraction": 0.0035326400777307755,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0004587577423080802,
+        "p50": 0.002192429266870022,
+        "p90": 0.007670478895306587
+      },
+      "mean_all_mass_outside_prediction": 0.04887618398675841,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.03227035701274872,
+        "p50": 0.05004742741584778,
+        "p90": 0.06444231420755386
+      },
+      "mean_oracle_route_recall": 0.9848661559447646,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.9669421315193176,
+        "p50": 0.9890142679214478,
+        "p90": 0.9971346855163574
+      },
+      "mean_predicted_tile_fraction": 0.5002297333843307,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.1267361044883728,
+        "p50": 0.5003858208656311,
+        "p90": 0.8711419701576233
+      },
+      "mean_oracle_mass_covered": 0.9073237797617912,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9031866788864136,
+        "p50": 0.9044691920280457,
+        "p90": 0.9128246307373047
+      },
+      "mean_attention_output_relative_l2": 0.06074813511222601,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.049657873809337616,
+        "p50": 0.056977275758981705,
+        "p90": 0.07015654444694519
+      },
+      "mean_attention_output_cosine_similarity": 0.9983492605388165,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9979339838027954,
+        "p50": 0.9987135529518127,
+        "p90": 0.999051570892334
+      },
+      "mean_attention_output_max_absolute_error": 3.1747451782226563,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.56640625,
+        "p50": 2.423828125,
+        "p90": 6.7265625
+      }
+    },
+    {
+      "from_step": 12,
+      "to_step": 13,
+      "mean_sudden_oracle_tile_fraction": 0.01960882740489069,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.0030487803742289543,
+        "p50": 0.014002333395183086,
+        "p90": 0.04218362271785736
+      },
+      "mean_sudden_dense_mass_fraction": 0.004582644130080098,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0005401540547609329,
+        "p50": 0.0028162479866296053,
+        "p90": 0.009808221831917763
+      },
+      "mean_all_mass_outside_prediction": 0.05248379082015162,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.03589986264705658,
+        "p50": 0.05377471074461937,
+        "p90": 0.06725268810987473
+      },
+      "mean_oracle_route_recall": 0.9803911726735532,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.957817792892456,
+        "p50": 0.98600172996521,
+        "p90": 0.9969512224197388
+      },
+      "mean_predicted_tile_fraction": 0.478668257947138,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.12017747014760971,
+        "p50": 0.46894291043281555,
+        "p90": 0.8555169701576233
+      },
+      "mean_oracle_mass_covered": 0.9075244339741766,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9031211733818054,
+        "p50": 0.9044449329376221,
+        "p90": 0.9139648675918579
+      },
+      "mean_attention_output_relative_l2": 0.06435168460011483,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.05517725273966789,
+        "p50": 0.061229158192873,
+        "p90": 0.07322843372821808
+      },
+      "mean_attention_output_cosine_similarity": 0.9981585897505283,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9978350400924683,
+        "p50": 0.9985266923904419,
+        "p90": 0.9988692998886108
+      },
+      "mean_attention_output_max_absolute_error": 3.4267601013183593,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.873046875,
+        "p50": 2.3515625,
+        "p90": 6.7421875
+      }
+    },
+    {
+      "from_step": 13,
+      "to_step": 14,
+      "mean_sudden_oracle_tile_fraction": 0.05202765248310243,
+      "sudden_oracle_tile_fraction_quantiles": {
+        "p10": 0.009669101797044277,
+        "p50": 0.04220779240131378,
+        "p90": 0.10533515363931656
+      },
+      "mean_sudden_dense_mass_fraction": 0.01732990000995187,
+      "sudden_dense_mass_fraction_quantiles": {
+        "p10": 0.0020814405288547277,
+        "p50": 0.009455131366848946,
+        "p90": 0.03822898119688034
+      },
+      "mean_all_mass_outside_prediction": 0.06815642453042528,
+      "all_mass_outside_prediction_quantiles": {
+        "p10": 0.0394875705242157,
+        "p50": 0.06614409387111664,
+        "p90": 0.09349220991134644
+      },
+      "mean_oracle_route_recall": 0.9479723471775651,
+      "oracle_route_recall_quantiles": {
+        "p10": 0.8950381875038147,
+        "p50": 0.9578059315681458,
+        "p90": 0.9903329610824585
+      },
+      "mean_predicted_tile_fraction": 0.4686619283468463,
+      "predicted_tile_fraction_quantiles": {
+        "p10": 0.11439043283462524,
+        "p50": 0.4538966119289398,
+        "p90": 0.8551311492919922
+      },
+      "mean_oracle_mass_covered": 0.9071700696460903,
+      "oracle_mass_covered_quantiles": {
+        "p10": 0.9029779434204102,
+        "p50": 0.9042317867279053,
+        "p90": 0.9128425717353821
+      },
+      "mean_attention_output_relative_l2": 0.07791739045642317,
+      "attention_output_relative_l2_quantiles": {
+        "p10": 0.066022127866745,
+        "p50": 0.07523851841688156,
+        "p90": 0.0947161614894867
+      },
+      "mean_attention_output_cosine_similarity": 0.9973643265664578,
+      "attention_output_cosine_similarity_quantiles": {
+        "p10": 0.9968350529670715,
+        "p50": 0.9977970123291016,
+        "p90": 0.9983952641487122
+      },
+      "mean_attention_output_max_absolute_error": 3.576031494140625,
+      "attention_output_max_absolute_error_quantiles": {
+        "p10": 1.7734375,
+        "p50": 2.72265625,
+        "p90": 7.375
+      }
+    }
+  ],
+  "aggregate": {
+    "sudden_oracle_tile_fraction": 0.026959237071132847,
+    "sudden_dense_mass_fraction": 0.007632336511921624,
+    "all_mass_outside_prediction": 0.051350505573653726,
+    "oracle_route_recall": 0.9730407629867217,
+    "predicted_tile_fraction": 0.558394738762415
+  },
+  "interpretation_guardrails": [
+    "This experiment isolates cross-step surprise; it does not benchmark speed.",
+    "The predictor receives the previous exact oracle route and is therefore an upper bound on a deployed sparse predictor.",
+    "One prompt and seed are insufficient for a general quality conclusion.",
+    "Low average surprise is not sufficient if p90 or worst-case layer/head values are large."
+  ],
+  "video_comparison": {
+    "frames": 9,
+    "mean_psnr": 17.356570595575224,
+    "mean_ssim": 0.6215855578581492,
+    "psnr_quantiles": {
+      "p10": 14.985429821783097,
+      "p50": 17.66387954584361,
+      "p90": 18.089333469242238
+    },
+    "ssim_quantiles": {
+      "p10": 0.47683748602867126,
+      "p50": 0.640516459941864,
+      "p90": 0.6504969596862793
+    }
+  }
+}

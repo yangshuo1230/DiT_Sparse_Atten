@@ -1,0 +1,5 @@
+# Install Wan2.1's accelerator-specific requirements first. These packages are
+# used by this repository's tests and video-quality reporting.
+pytest>=8
+opencv-python-headless>=4.8
+scikit-image>=0.22

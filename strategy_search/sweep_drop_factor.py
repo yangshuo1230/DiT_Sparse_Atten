@@ -47,7 +47,8 @@ def main():
                      "--output", str(dense_video)] + extra_args
         print("$", " ".join(dense_cmd), flush=True)
         started = time.perf_counter()
-        completed = subprocess.run(dense_cmd, env=os.environ.copy())
+        completed = subprocess.run(
+            dense_cmd, env=os.environ.copy(), check=False)
         if completed.returncode:
             raise SystemExit(
                 f"dense reference failed with exit code {completed.returncode}")
@@ -75,7 +76,7 @@ def main():
         if not args.no_dense_shadow_probe:
             env["WAN_DENSE_MASS_PROBE"] = "1"
         print("$", " ".join(cmd), flush=True)
-        completed = subprocess.run(cmd, env=env)
+        completed = subprocess.run(cmd, env=env, check=False)
         if completed.returncode:
             raise SystemExit(f"drop_factor={factor} failed with exit code {completed.returncode}")
         rows = [json.loads(line) for line in stats_path.read_text().splitlines() if line.strip()]
@@ -86,8 +87,9 @@ def main():
             by_step.setdefault(step, []).append(row)
         step_summary = []
         for step, values in sorted(by_step.items(), key=lambda item: int(item[0])):
-            def mean(key):
-                valid = [float(v[key]) for v in values if v.get(key) is not None]
+            def mean(key, step_values=values):
+                valid = [float(v[key]) for v in step_values
+                         if v.get(key) is not None]
                 return sum(valid) / len(valid) if valid else None
             step_summary.append({"step": int(step), "calls": len(values),
                                  "executed_tile_fraction": mean("executed_tile_fraction"),

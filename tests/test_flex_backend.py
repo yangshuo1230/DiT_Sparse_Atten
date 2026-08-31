@@ -6,9 +6,38 @@ from attention_backends.flex import (
     _build_block_mask,
     _dense_bootstrap,
     _flex_output,
+    _pack_route,
+    _sampled_block_mass,
     _top_mass_route,
     flex_attention,
 )
+
+
+def test_pack_route_preserves_selected_indices():
+    route = torch.tensor([
+        [[True, False, True], [False, True, False]],
+        [[False, True, True], [True, False, True]],
+    ])
+    counts, indices = _pack_route(route)
+    assert counts.tolist() == [[[2, 1], [2, 2]]]
+    for head in range(route.shape[0]):
+        for query in range(route.shape[1]):
+            count = counts[0, head, query]
+            selected = indices[0, head, query, :count]
+            assert selected.tolist() == torch.where(route[head, query])[0].tolist()
+
+
+def test_full_sampling_matches_exact_block_route_mass():
+    torch.manual_seed(4)
+    tokens, heads, head_dim, block = 12, 2, 8, 4
+    q = torch.randn(1, tokens, heads, head_dim)
+    k = torch.randn_like(q)
+    scores = torch.einsum(
+        "bqhd,bkhd->bhqk", q.float(), k.float()) * head_dim**-0.5
+    lse = scores.logsumexp(-1)
+    exact = _block_attention_mass(q, k, lse, block)
+    sampled = _sampled_block_mass(q, k, block, samples=block)
+    torch.testing.assert_close(sampled, exact / block, atol=1e-6, rtol=1e-6)
 
 
 def test_top_mass_route_respects_row_cap():

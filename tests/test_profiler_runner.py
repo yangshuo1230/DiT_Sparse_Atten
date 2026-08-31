@@ -21,8 +21,16 @@ def test_install_probe_patches_both_attention_call_sites(monkeypatch):
     def original_forward(instance, *args, **kwargs):
         return "forward"
 
+    class FakeSelfAttention:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def forward(self, *args, **kwargs):
+            return "self"
+
     attention_module.flash_attention = original_attention
     model_module.flash_attention = original_attention
+    model_module.WanSelfAttention = FakeSelfAttention
     model_module.WanModel = types.SimpleNamespace(forward=original_forward)
 
     modules = {

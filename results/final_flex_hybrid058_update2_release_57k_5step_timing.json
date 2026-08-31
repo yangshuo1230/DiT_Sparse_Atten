@@ -1,0 +1,144 @@
+{
+  "schema_version": 2,
+  "created_at": "2026-08-31T02:24:14.417350+00:00",
+  "status": "completed",
+  "error": null,
+  "config": {
+    "backend": "flex_reuse",
+    "wan_repo": "/root/Wan2.1",
+    "model_dir": "/root/.cache/wan2.1-14b",
+    "output": "/root/wan-attention-study/results/final_flex_hybrid058_update2_release_57k_5step.mp4",
+    "prompt": "A small white dog running on a beach at sunset",
+    "size": "1280*720",
+    "frames": 61,
+    "steps": 5,
+    "seed": 0,
+    "offload_model": false,
+    "tile": 64,
+    "keep": 0.625,
+    "mass_target": 0.95,
+    "drop_factor": 0.1,
+    "query_chunk": 256,
+    "policy": "reuse",
+    "triton_sparse": false,
+    "route_prefetch": true,
+    "flex_block": 128,
+    "flex_compile": true,
+    "flex_update_interval": 0,
+    "flex_sampled_update_interval": 2,
+    "flex_route_samples": 16,
+    "flex_route_persistence": 0.5,
+    "flex_sampled_prefetch": false,
+    "flex_bootstrap_prefetch": true,
+    "flex_bootstrap": "sampled",
+    "flex_dense_route_threshold": 0.58
+  },
+  "environment": {
+    "torch_version": "2.8.0",
+    "cuda_available": true,
+    "device": "PPU-ZW810E",
+    "study_git": {
+      "commit": "3e56439c41141faec74bdd0076705e59759a90b4",
+      "dirty": true
+    },
+    "wan_git": {
+      "commit": "9737cba9c1c3c4d04b33fcad41c111989865d315",
+      "dirty": true
+    }
+  },
+  "routing": {
+    "backend": "flex_reuse",
+    "flex_update_semantics": "sampled_refresh_every_2_steps",
+    "backend_profile": {
+      "phase_counts": {
+        "dense_bootstrap": 0,
+        "sampled_bootstrap": 80,
+        "exact_refresh": 0,
+        "sampled_update": 65,
+        "sparse_reuse": 260,
+        "dense_dispatch": 60
+      },
+      "active_routes": 0,
+      "released_routes": 80,
+      "mean_active_route_keep": 0.5058550536632538,
+      "dense_dispatched_routes": 15
+    }
+  },
+  "timing": {
+    "denoising_steps_observed": 5,
+    "model_forward_calls": 10,
+    "model_forward_cuda_seconds": 386.91887499999996,
+    "calls": [
+      {
+        "step": 0,
+        "branch": 0,
+        "timestep": 999.0,
+        "cuda_seconds": 43.8629296875,
+        "wall_seconds_unsynchronized": 43.62594302603975
+      },
+      {
+        "step": 0,
+        "branch": 1,
+        "timestep": 999.0,
+        "cuda_seconds": 43.72072265625,
+        "wall_seconds_unsynchronized": 43.4698458899511
+      },
+      {
+        "step": 1,
+        "branch": 0,
+        "timestep": 952.0,
+        "cuda_seconds": 38.7114140625,
+        "wall_seconds_unsynchronized": 37.87114221195225
+      },
+      {
+        "step": 1,
+        "branch": 1,
+        "timestep": 952.0,
+        "cuda_seconds": 37.29570703125,
+        "wall_seconds_unsynchronized": 36.45483277901076
+      },
+      {
+        "step": 2,
+        "branch": 0,
+        "timestep": 882.0,
+        "cuda_seconds": 38.896765625,
+        "wall_seconds_unsynchronized": 38.038536712992936
+      },
+      {
+        "step": 2,
+        "branch": 1,
+        "timestep": 882.0,
+        "cuda_seconds": 39.03504296875,
+        "wall_seconds_unsynchronized": 38.172036146046594
+      },
+      {
+        "step": 3,
+        "branch": 0,
+        "timestep": 768.0,
+        "cuda_seconds": 36.15539453125,
+        "wall_seconds_unsynchronized": 31.811030848999508
+      },
+      {
+        "step": 3,
+        "branch": 1,
+        "timestep": 768.0,
+        "cuda_seconds": 36.54358203125,
+        "wall_seconds_unsynchronized": 32.14046226802748
+      },
+      {
+        "step": 4,
+        "branch": 0,
+        "timestep": 555.0,
+        "cuda_seconds": 36.1535546875,
+        "wall_seconds_unsynchronized": 31.809218057082035
+      },
+      {
+        "step": 4,
+        "branch": 1,
+        "timestep": 555.0,
+        "cuda_seconds": 36.54376171875,
+        "wall_seconds_unsynchronized": 32.13944805308711
+      }
+    ]
+  }
+}

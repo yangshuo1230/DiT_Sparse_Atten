@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import math
 import json
+import math
 import os
-import sys
 from dataclasses import dataclass
 
 import torch
@@ -17,6 +16,7 @@ except ImportError:  # Triton is optional; the PyTorch reference path remains us
     triton = None
     tl = None
 
+from .context import routing_context
 from .dense import DenseBackend, install
 
 
@@ -134,16 +134,6 @@ def _spatial_layout(grid, target_tile_tokens, tokens):
     )
     return _SpatialTileLayout(
         frames, height, width, tile_h, tile_w)
-
-
-def _routing_context():
-    model = sys.modules.get("wan.modules.model")
-    return (
-        getattr(model, "_CURRENT_ATTN_ID", -1),
-        getattr(model, "_CURRENT_DENOISE_STEP", -1),
-        getattr(model, "_CURRENT_CFG_BRANCH", -1),
-        getattr(model, "_CURRENT_GRID_SIZE", None),
-    )
 
 
 def _axis_offsets(length, device):
@@ -454,7 +444,7 @@ if triton is not None:
         running_max = tl.full((BLOCK_M,), -float("inf"), tl.float32)
         running_sum = tl.zeros((BLOCK_M,), tl.float32)
         accumulator = tl.zeros((BLOCK_M, BLOCK_V), tl.float32)
-        for selected in range(0, max_selected):
+        for selected in range(max_selected):
             tile_id = tl.load(
                 tile_ptr + group * stride_it + selected * stride_iv)
             tile_valid = tl.load(
@@ -547,7 +537,7 @@ if triton is not None:
             sum_ptr + head * q_rows + rows,
             mask=row_valid & (rows < q_rows),
             other=0.0)
-        for selected in range(0, max_selected):
+        for selected in range(max_selected):
             tile_id = tl.load(
                 tile_ptr + group * stride_it + selected * stride_iv)
             tile_valid = tl.load(
@@ -806,7 +796,7 @@ class MatrixSparseBackend:
         k = layout.to_tile_major(k)
         v = layout.to_tile_major(v)
         tokens, heads = q.shape[1:3]
-        attention_id, step, branch, _ = _routing_context()
+        attention_id, step, branch, _ = routing_context(include_grid=True)
         # Layers and CFG branches follow different attention trajectories and
         # must never share a route, even when their tensor shapes match.
         key = (attention_id, branch, heads, layout)
@@ -935,7 +925,7 @@ class MatrixSparseBackend:
 
     def __call__(self, q, k, v, softmax_scale=None, **kwargs):
         if q.shape[1] == k.shape[1] and q.shape[0] == 1:
-            _, _, _, grid = _routing_context()
+            _, _, _, grid = routing_context(include_grid=True)
             layout = _spatial_layout(grid, self.config.tile, q.shape[1])
             if layout is not None:
                 return self._sparse_attention(

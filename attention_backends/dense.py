@@ -5,6 +5,8 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 
+from .context import install_wan_context
+
 
 class DenseBackend:
     name = "dense"
@@ -51,6 +53,7 @@ def install(backend=None):
     import wan.modules.attention as attention_module
     import wan.modules.model as model_module
 
+    install_wan_context()
     backend = backend or DenseBackend()
     attention_module.flash_attention = backend
     model_module.flash_attention = backend

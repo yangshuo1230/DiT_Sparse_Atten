@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "configuration": {
+    "block_size": 128,
+    "keep": 0.625,
+    "mass_target": 0.95,
+    "samples": [
+      16
+    ],
+    "persistence_factors": [
+      0.5,
+      1.0,
+      2.0,
+      4.0
+    ]
+  },
+  "calls": {
+    "self_attention": 400,
+    "cross_attention": 0
+  },
+  "metrics": {
+    "exact_keep_fraction": {
+      "mean": 0.5671433857828378,
+      "quantiles": {
+        "p10": 0.49483999609947205,
+        "p50": 0.5793600082397461,
+        "p90": 0.6221599578857422
+      }
+    },
+    "reuse_dense_mass_covered": {
+      "mean": 0.885233734920621,
+      "quantiles": {
+        "p10": 0.834750771522522,
+        "p50": 0.8933601975440979,
+        "p90": 0.9234387874603271
+      }
+    },
+    "reuse_route_recall": {
+      "mean": 0.8931656248867512,
+      "quantiles": {
+        "p10": 0.8318132758140564,
+        "p50": 0.9021003246307373,
+        "p90": 0.9364977478981018
+      }
+    },
+    "sample_16_dense_mass_covered": {
+      "mean": 0.8698865061998368,
+      "quantiles": {
+        "p10": 0.8298250436782837,
+        "p50": 0.8691518902778625,
+        "p90": 0.9176265597343445
+      }
+    },
+    "sample_16_jaccard": {
+      "mean": 0.8141370613873005,
+      "quantiles": {
+        "p10": 0.730239987373352,
+        "p50": 0.804333508014679,
+        "p90": 0.9077392220497131
+      }
+    },
+    "sample_16_persistence_0.5_dense_mass_covered": {
+      "mean": 0.8845955638214946,
+      "quantiles": {
+        "p10": 0.8425925374031067,
+        "p50": 0.8840743899345398,
+        "p90": 0.923590898513794
+      }
+    },
+    "sample_16_persistence_0.5_keep_fraction": {
+      "mean": 0.5794031115248799,
+      "quantiles": {
+        "p10": 0.5246399641036987,
+        "p50": 0.5884400010108948,
+        "p90": 0.6188799738883972
+      }
+    },
+    "sample_16_persistence_0.5_route_recall": {
+      "mean": 0.8775849800556899,
+      "quantiles": {
+        "p10": 0.8435074687004089,
+        "p50": 0.8791260719299316,
+        "p90": 0.9096853137016296
+      }
+    },
+    "sample_16_persistence_1_dense_mass_covered": {
+      "mean": 0.8765922008082271,
+      "quantiles": {
+        "p10": 0.8397297263145447,
+        "p50": 0.8754451274871826,
+        "p90": 0.915648877620697
+      }
+    },
+    "sample_16_persistence_1_keep_fraction": {
+      "mean": 0.5890458627603948,
+      "quantiles": {
+        "p10": 0.5476799607276917,
+        "p50": 0.598039984703064,
+        "p90": 0.6236400008201599
+      }
+    },
+    "sample_16_persistence_1_route_recall": {
+      "mean": 0.8536976847797633,
+      "quantiles": {
+        "p10": 0.8257269859313965,
+        "p50": 0.8535093069076538,
+        "p90": 0.8784652948379517
+      }
+    },
+    "sample_16_persistence_2_dense_mass_covered": {
+      "mean": 0.8638474274426698,
+      "quantiles": {
+        "p10": 0.8283135890960693,
+        "p50": 0.8650726079940796,
+        "p90": 0.8992229104042053
+      }
+    },
+    "sample_16_persistence_2_keep_fraction": {
+      "mean": 0.5939488586038351,
+      "quantiles": {
+        "p10": 0.5555999875068665,
+        "p50": 0.6015200018882751,
+        "p90": 0.6266799569129944
+      }
+    },
+    "sample_16_persistence_2_route_recall": {
+      "mean": 0.8330980641767383,
+      "quantiles": {
+        "p10": 0.8044149279594421,
+        "p50": 0.8320140838623047,
+        "p90": 0.8608230948448181
+      }
+    },
+    "sample_16_persistence_4_dense_mass_covered": {
+      "mean": 0.8546609234064817,
+      "quantiles": {
+        "p10": 0.8213232755661011,
+        "p50": 0.8565723896026611,
+        "p90": 0.888237714767456
+      }
+    },
+    "sample_16_persistence_4_keep_fraction": {
+      "mean": 0.5992543593049049,
+      "quantiles": {
+        "p10": 0.5543999671936035,
+        "p50": 0.6090799570083618,
+        "p90": 0.6315599679946899
+      }
+    },
+    "sample_16_persistence_4_route_recall": {
+      "mean": 0.8238920332863927,
+      "quantiles": {
+        "p10": 0.7909806966781616,
+        "p50": 0.8227760195732117,
+        "p90": 0.8555493354797363
+      }
+    },
+    "sample_16_route_recall": {
+      "mean": 0.8833377610147,
+      "quantiles": {
+        "p10": 0.819229006767273,
+        "p50": 0.8818747401237488,
+        "p90": 0.9502442479133606
+      }
+    },
+    "sample_16_selected_mass_recall": {
+      "mean": 0.9740458863973618,
+      "quantiles": {
+        "p10": 0.9404236674308777,
+        "p50": 0.9804490804672241,
+        "p90": 0.9962983131408691
+      }
+    },
+    "static_initial_dense_mass_covered": {
+      "mean": 0.8475510980933905,
+      "quantiles": {
+        "p10": 0.8070101141929626,
+        "p50": 0.8511223196983337,
+        "p90": 0.881630003452301
+      }
+    },
+    "static_initial_route_recall": {
+      "mean": 0.8185451045632363,
+      "quantiles": {
+        "p10": 0.7834252119064331,
+        "p50": 0.8185963034629822,
+        "p90": 0.8524819016456604
+      }
+    }
+  },
+  "run": {
+    "created_at": "2026-08-30T16:33:54.181045+00:00",
+    "command_config": {
+      "wan_repo": "/root/Wan2.1",
+      "model_dir": "/root/.cache/wan2.1-14b",
+      "size": "832*480",
+      "frames": 5,
+      "steps": 5,
+      "seed": 0,
+      "prompt": "A small white dog running on a beach at sunset",
+      "video": "/root/wan-attention-study/results/flex_route_quality_target95_dense.mp4",
+      "block_size": 128,
+      "keep": 0.625,
+      "mass_target": 0.95,
+      "samples": "[16]",
+      "result": "/root/wan-attention-study/results/flex_route_quality_target95_5f.json"
+    },
+    "environment": {
+      "torch_version": "2.8.0",
+      "cuda_available": true,
+      "device": "PPU-ZW810E",
+      "study_git": {
+        "commit": "3e56439c41141faec74bdd0076705e59759a90b4",
+        "dirty": true
+      },
+      "wan_git": {
+        "commit": "9737cba9c1c3c4d04b33fcad41c111989865d315",
+        "dirty": true
+      }
+    }
+  }
+}

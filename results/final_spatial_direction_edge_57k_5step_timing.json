@@ -1,0 +1,155 @@
+{
+  "schema_version": 2,
+  "created_at": "2026-08-31T08:54:12.051229+00:00",
+  "status": "completed",
+  "error": null,
+  "config": {
+    "backend": "flex_reuse",
+    "wan_repo": "/root/Wan2.1",
+    "model_dir": "/root/.cache/wan2.1-14b",
+    "output": "/root/wan-attention-study/results/final_spatial_direction_edge_57k_5step.mp4",
+    "prompt": "A small white dog running on a beach at sunset",
+    "size": "1280*720",
+    "frames": 61,
+    "steps": 5,
+    "seed": 0,
+    "offload_model": false,
+    "tile": 64,
+    "keep": 0.625,
+    "mass_target": 0.95,
+    "drop_factor": 0.1,
+    "query_chunk": 256,
+    "policy": "reuse",
+    "triton_sparse": false,
+    "route_prefetch": true,
+    "flex_block": 128,
+    "flex_compile": true,
+    "flex_update_interval": 0,
+    "flex_sampled_update_interval": 2,
+    "flex_route_samples": 16,
+    "flex_route_persistence": 0.25,
+    "flex_sampled_prefetch": false,
+    "flex_bootstrap_prefetch": true,
+    "flex_bootstrap": "sampled",
+    "flex_dense_route_threshold": 0.58,
+    "flex_spatial_reorder": true,
+    "flex_spatial_microtile": 32,
+    "flex_directional_update": true,
+    "flex_direction_min_ratio": 0.0,
+    "flex_direction_bonus": 0.25,
+    "flex_route_budget_scale": 1.05,
+    "flex_route_exploration": 0.02,
+    "flex_direction_q": true,
+    "flex_direction_k": true,
+    "flex_direction_joint": true
+  },
+  "environment": {
+    "torch_version": "2.8.0",
+    "cuda_available": true,
+    "device": "PPU-ZW810E",
+    "study_git": {
+      "commit": "3e56439c41141faec74bdd0076705e59759a90b4",
+      "dirty": true
+    },
+    "wan_git": {
+      "commit": "9737cba9c1c3c4d04b33fcad41c111989865d315",
+      "dirty": true
+    }
+  },
+  "routing": {
+    "backend": "flex_reuse",
+    "flex_update_semantics": "sampled_refresh_every_2_steps",
+    "backend_profile": {
+      "phase_counts": {
+        "dense_bootstrap": 0,
+        "sampled_bootstrap": 80,
+        "exact_refresh": 0,
+        "sampled_update": 65,
+        "sparse_reuse": 245,
+        "dense_dispatch": 75
+      },
+      "active_routes": 0,
+      "released_routes": 80,
+      "mean_route_keep": 0.5302731472998857,
+      "mean_frontier_fraction": 0.20722409300506114,
+      "dense_dispatched_routes": 20
+    }
+  },
+  "timing": {
+    "denoising_steps_observed": 5,
+    "model_forward_calls": 10,
+    "model_forward_cuda_seconds": 395.32964453125,
+    "calls": [
+      {
+        "step": 0,
+        "branch": 0,
+        "timestep": 999.0,
+        "cuda_seconds": 44.10490234375,
+        "wall_seconds_unsynchronized": 43.86620795505587
+      },
+      {
+        "step": 0,
+        "branch": 1,
+        "timestep": 999.0,
+        "cuda_seconds": 43.886875,
+        "wall_seconds_unsynchronized": 43.64671107195318
+      },
+      {
+        "step": 1,
+        "branch": 0,
+        "timestep": 952.0,
+        "cuda_seconds": 38.46869921875,
+        "wall_seconds_unsynchronized": 37.62703686603345
+      },
+      {
+        "step": 1,
+        "branch": 1,
+        "timestep": 952.0,
+        "cuda_seconds": 37.49921484375,
+        "wall_seconds_unsynchronized": 36.655795861035585
+      },
+      {
+        "step": 2,
+        "branch": 0,
+        "timestep": 882.0,
+        "cuda_seconds": 40.51144921875,
+        "wall_seconds_unsynchronized": 39.66638306004461
+      },
+      {
+        "step": 2,
+        "branch": 1,
+        "timestep": 882.0,
+        "cuda_seconds": 40.4301015625,
+        "wall_seconds_unsynchronized": 39.58311116800178
+      },
+      {
+        "step": 3,
+        "branch": 0,
+        "timestep": 768.0,
+        "cuda_seconds": 37.50894140625,
+        "wall_seconds_unsynchronized": 33.76394894893747
+      },
+      {
+        "step": 3,
+        "branch": 1,
+        "timestep": 768.0,
+        "cuda_seconds": 37.70901171875,
+        "wall_seconds_unsynchronized": 33.92724340793211
+      },
+      {
+        "step": 4,
+        "branch": 0,
+        "timestep": 555.0,
+        "cuda_seconds": 37.50569921875,
+        "wall_seconds_unsynchronized": 33.76079003396444
+      },
+      {
+        "step": 4,
+        "branch": 1,
+        "timestep": 555.0,
+        "cuda_seconds": 37.70475,
+        "wall_seconds_unsynchronized": 33.922030956018716
+      }
+    ]
+  }
+}

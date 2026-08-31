@@ -91,7 +91,7 @@ def _masked_attention(q, k, v, tile_mask, tile, query_chunk,
     """Reference attention restricted to a [head, q_tile, k_tile] mask."""
     if q.shape[0] != 1:
         raise ValueError("Hotspot suppression supports batch-1 self-attention")
-    tokens, heads, head_dim = q.shape[1:]
+    tokens, _heads, head_dim = q.shape[1:]
     scale = softmax_scale if softmax_scale is not None else 1 / math.sqrt(head_dim)
     q_value = q.float()
     if q_scale is not None:

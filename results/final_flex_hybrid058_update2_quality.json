@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "comparison": {
+    "reference": "final_dense_57k_5step.mp4",
+    "candidate": "final_flex_hybrid058_update2_release_57k_5step.mp4",
+    "size": "1280*720",
+    "denoising_steps": 5,
+    "seed": 0,
+    "prompt": "A small white dog running on a beach at sunset",
+    "method": "frame-aligned decoded RGB in [0,1]; skimage SSIM and RGB MSE PSNR"
+  },
+  "metrics": {
+  "frames": 61,
+  "mean_psnr": 28.377720156941304,
+  "mean_ssim": 0.8517407364532595,
+  "psnr_quantiles": {
+    "p10": 27.736402253040247,
+    "p50": 28.348676672747132,
+    "p90": 29.393675732794176
+  },
+  "ssim_quantiles": {
+    "p10": 0.8295342922210693,
+    "p50": 0.8508041501045227,
+    "p90": 0.8707313537597656
+  }
+  }
+}

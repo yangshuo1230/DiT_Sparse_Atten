@@ -1,0 +1,131 @@
+{
+  "schema_version": 2,
+  "created_at": "2026-08-30T17:24:56.702273+00:00",
+  "status": "completed",
+  "error": null,
+  "config": {
+    "backend": "dense",
+    "wan_repo": "/root/Wan2.1",
+    "model_dir": "/root/.cache/wan2.1-14b",
+    "output": "/root/wan-attention-study/results/final_dense_57k_5step.mp4",
+    "prompt": "A small white dog running on a beach at sunset",
+    "size": "1280*720",
+    "frames": 61,
+    "steps": 5,
+    "seed": 0,
+    "offload_model": false,
+    "tile": 64,
+    "keep": 0.625,
+    "mass_target": 0.9,
+    "drop_factor": 0.1,
+    "query_chunk": 256,
+    "policy": "reuse",
+    "triton_sparse": false,
+    "route_prefetch": true,
+    "flex_block": 128,
+    "flex_compile": true,
+    "flex_update_interval": 0,
+    "flex_sampled_update_interval": 0,
+    "flex_route_samples": 2,
+    "flex_route_persistence": 0.5,
+    "flex_sampled_prefetch": true,
+    "flex_bootstrap_prefetch": true,
+    "flex_bootstrap": "exact",
+    "flex_dense_route_threshold": null
+  },
+  "environment": {
+    "torch_version": "2.8.0",
+    "cuda_available": true,
+    "device": "PPU-ZW810E",
+    "study_git": {
+      "commit": "3e56439c41141faec74bdd0076705e59759a90b4",
+      "dirty": true
+    },
+    "wan_git": {
+      "commit": "9737cba9c1c3c4d04b33fcad41c111989865d315",
+      "dirty": true
+    }
+  },
+  "routing": {
+    "backend": "dense",
+    "flex_update_semantics": "static_step_0_route",
+    "backend_profile": null
+  },
+  "timing": {
+    "denoising_steps_observed": 5,
+    "model_forward_calls": 10,
+    "model_forward_cuda_seconds": 406.5826640625,
+    "calls": [
+      {
+        "step": 0,
+        "branch": 0,
+        "timestep": 999.0,
+        "cuda_seconds": 40.888375,
+        "wall_seconds_unsynchronized": 35.91926605103072
+      },
+      {
+        "step": 0,
+        "branch": 1,
+        "timestep": 999.0,
+        "cuda_seconds": 40.6332734375,
+        "wall_seconds_unsynchronized": 35.66493571095634
+      },
+      {
+        "step": 1,
+        "branch": 0,
+        "timestep": 952.0,
+        "cuda_seconds": 40.63262109375,
+        "wall_seconds_unsynchronized": 35.66349046502728
+      },
+      {
+        "step": 1,
+        "branch": 1,
+        "timestep": 952.0,
+        "cuda_seconds": 40.63588671875,
+        "wall_seconds_unsynchronized": 35.665016141021624
+      },
+      {
+        "step": 2,
+        "branch": 0,
+        "timestep": 882.0,
+        "cuda_seconds": 40.636453125,
+        "wall_seconds_unsynchronized": 35.66619472904131
+      },
+      {
+        "step": 2,
+        "branch": 1,
+        "timestep": 882.0,
+        "cuda_seconds": 40.62626171875,
+        "wall_seconds_unsynchronized": 35.65876825910527
+      },
+      {
+        "step": 3,
+        "branch": 0,
+        "timestep": 768.0,
+        "cuda_seconds": 40.63201171875,
+        "wall_seconds_unsynchronized": 35.66317193105351
+      },
+      {
+        "step": 3,
+        "branch": 1,
+        "timestep": 768.0,
+        "cuda_seconds": 40.63880859375,
+        "wall_seconds_unsynchronized": 35.668131618062034
+      },
+      {
+        "step": 4,
+        "branch": 0,
+        "timestep": 555.0,
+        "cuda_seconds": 40.6273515625,
+        "wall_seconds_unsynchronized": 35.65800398401916
+      },
+      {
+        "step": 4,
+        "branch": 1,
+        "timestep": 555.0,
+        "cuda_seconds": 40.63162109375,
+        "wall_seconds_unsynchronized": 35.66230660502333
+      }
+    ]
+  }
+}

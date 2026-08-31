@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import argparse
+import json
 import math
 import os
 from collections import defaultdict
@@ -145,7 +145,6 @@ def _packing(mask):
     if not selected:
         return {"bbox_utilization": 0.0, "row_runs": 0, "component_blocks": 0,
                 "component_bbox_utilization": 0.0}
-    rows, cols = mask.shape
     bbox_area = ((int(points[0].max()) - int(points[0].min()) + 1) *
                  (int(points[1].max()) - int(points[1].min()) + 1))
     row_runs = 0

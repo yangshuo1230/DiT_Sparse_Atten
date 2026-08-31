@@ -1,5 +1,23 @@
 # Wan2.1-14B 完整 Attention 方阵 Tile 稀疏实验报告
 
+> 2026-08-31 更新：本文第 1～10 节记录早期 matrix-sparse reference 路线，
+> 其中“下一工程重点”已经完成一次 FlexAttention 迭代。新的 sampled-bootstrap
+> Hybrid 在 57,600 tokens、5 steps 上取得 `1.0508×` model-forward 加速，matched
+> 视频为 PSNR `28.38 dB`、SSIM `0.8517`。实现、命令、算子分解和限制见
+> `FLEX_ITERATION_REPORT_ZH.md`。旧 Python/Triton matrix-sparse 性能数字仍作为
+> 历史对照，不代表当前最快实现。
+
+> 空间化后续迭代进一步验证：Morton-packed spatial route 在不增加token/block数量
+> 的情况下达到 `1.0556×`；维护20.72% frontier并做方向扩展可将SSIM从`0.8507`
+> 提升到`0.8573`，但加速降为`1.0285×`。方向扩展是质量/速度Pareto选项，不是
+> 对空间全局更新的无条件替代。完整数据同样见 `FLEX_ITERATION_REPORT_ZH.md`。
+
+> 同期 hotspot suppression 反事实实验并未支持“局部演化足以保证质量”：单
+> prompt/seed 下 sudden dense mass 均值约 `0.763%`、预测外总 mass 约 `5.14%`，
+> 最终视频 PSNR `17.36 dB`、SSIM `0.622`，均未达到既定门槛。因此当前 Hybrid
+> 保留 persistence、周期 sampled update 和 dense/Flex 自动分派，不能把简单空间
+> 邻域扩展当作已验证方案。
+
 ## 1. 修正后的研究对象
 
 当前实验研究每个denoising step、transformer layer、attention head和CFG branch的完整attention矩阵：

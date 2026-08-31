@@ -9,7 +9,8 @@ profiling programs.
 infer.py                 single inference frontend
 attention_backends/
   dense.py               PyTorch SDPA backend
-  flex.py                minimal static-route FlexAttention backend
+  context.py             runtime Wan layer/step/CFG/grid context injection
+  flex.py                reusable-route FlexAttention backend
   sparse.py              full QxK matrix sparse reference backend
 profiles/
   gemm.py                attention-shaped GEMM benchmark
@@ -37,20 +38,74 @@ python3 infer.py --backend sparse --tile 64 --policy reuse \
   --output output-sparse.mp4
 
 python3 infer.py --backend flex_reuse --flex-block 128 \
+  --flex-update-interval 0 \
   --output output-flex-reuse.mp4
+
+# Validated 57,600-token hybrid with one lightweight update in five steps.
+python3 infer.py --backend flex_reuse --size 1280*720 --frames 61 --steps 5 \
+  --flex-bootstrap sampled --flex-bootstrap-prefetch \
+  --flex-sampled-update-interval 2 --no-flex-sampled-prefetch \
+  --flex-route-samples 16 --flex-route-persistence 0.5 \
+  --mass-target 0.95 --keep 0.625 \
+  --flex-dense-route-threshold 0.58 \
+  --timing results/flex-timing.json --output output-flex.mp4
+
+# Faster spatial packing variant (1.0556x model-forward speedup).
+python3 infer.py --backend flex_reuse --size 1280*720 --frames 61 --steps 5 \
+  --flex-bootstrap sampled --flex-bootstrap-prefetch \
+  --flex-spatial-reorder --flex-sampled-update-interval 2 \
+  --no-flex-sampled-prefetch --flex-route-samples 16 \
+  --flex-route-persistence 0.25 --mass-target 0.95 --keep 0.625 \
+  --flex-dense-route-threshold 0.58 --output output-spatial.mp4
+
+# Quality-biased spatial frontier/directional variant.
+python3 infer.py --backend flex_reuse --size 1280*720 --frames 61 --steps 5 \
+  --flex-bootstrap sampled --flex-bootstrap-prefetch \
+  --flex-spatial-reorder --flex-directional-update \
+  --flex-direction-min-ratio 0 --flex-direction-bonus 0.25 \
+  --flex-route-budget-scale 1.05 --flex-route-exploration 0.02 \
+  --flex-sampled-update-interval 2 --no-flex-sampled-prefetch \
+  --flex-route-samples 16 --flex-route-persistence 0.25 \
+  --mass-target 0.95 --keep 0.625 --flex-dense-route-threshold 0.58 \
+  --output output-spatial-direction.mp4
 
 # Experimental Triton output and route-statistics kernels.
 python3 infer.py --backend sparse --tile 64 --policy directional \
   --triton-sparse --output output-sparse-triton.mp4
 ```
 
-`flex_reuse` can now periodically refresh its exact top-mass route instead of
-keeping the first-step mask forever. `--flex-update-interval 1` updates every
-denoising step, while larger values amortize the `BlockMask` construction
-cost. On the synthetic 57,600-token benchmark, later-step averages are about
-`1.90 s` at interval 1, `1.10 s` at interval 2, and `0.81 s` at interval 5
-with 50% keep. Larger intervals trade route freshness for speed; the historical
-fully-static behavior remains available with a very large interval.
+`flex_reuse` can periodically refresh its exact top-mass route. The default
+`--flex-update-interval 0` keeps the step-0 mask static. A positive value
+performs an exact dense refresh every N denoising steps; `1` therefore refreshes
+every step and executes no sparse reuse steps. Exact refresh includes dense
+FlexAttention, a second complete QK pass, route selection, and `BlockMask`
+construction. It is a quality reference, not a lightweight route update.
+
+The lightweight path is enabled with `--flex-sampled-update-interval N`. It
+samples Q/K tokens inside each 128-token block, estimates block mass without
+dense attention, adds a previous-route persistence prior, and rebuilds the
+mask. Synchronous updates use the current step immediately. Optional
+`--flex-sampled-prefetch` prepares a route for the next step on a side stream;
+it is faster but adds prediction lag and was not used by the validated quality
+configuration below.
+
+`--flex-bootstrap sampled` still returns complete dense SDPA output at step 0;
+only route measurement is sampled. With `--flex-bootstrap-prefetch`, that route
+is prepared alongside the remaining transformer work. Per-layer/CFG routes at
+or above `--flex-dense-route-threshold` remain on dense SDPA, since Flex is not
+faster for high keep fractions.
+
+`--flex-spatial-reorder` partitions Wan's `(F,H,W)` grid into exact spatial
+microtiles whose area divides 128, orders them by a Morton/Z traversal, and
+packs them into the existing 128-token route blocks without changing sequence
+length or block count. At 720p it uses `1x16` microtiles, eight per route block;
+Q/K/V are jointly reordered after RoPE and outputs are restored afterward.
+
+`--flex-directional-update` maintains a separate frontier mask. Only selected
+QxK cells with an open spatial neighbour generate Q-only, K-only, or joint
+candidates. Candidate and old blocks are rescored, then pruned to
+`--flex-route-budget-scale` times the previous per-row budget. A small global
+exploration fraction avoids making spatial locality a hard assumption.
 
 The fused Triton path is used for both `reuse` and `directional`. The output
 kernel writes each query's online-softmax max and sum; a second Triton kernel
@@ -60,41 +115,41 @@ directional benchmark improves from about 8.41 seconds to 4.04 seconds
 (about 2.08x) at 62.5% keep. Correctness is covered by
 `tests/test_sparse_triton_stats.py`.
 
-### Minimal FlexAttention closure
+### FlexAttention closure
 
-`flex_reuse` is a deliberately limited kernel-validation backend:
+`flex_reuse` supports two bootstrap modes:
 
-1. The first denoising step runs dense FlexAttention once to obtain the normal
-   output and each query's log-sum-exp (LSE).
-2. A second exact Triton QK pass uses that LSE to reduce probabilities directly
-   into 128x128 block mass without materializing an attention matrix.
-3. The per-head, per-query-block top-mass route is converted to a PyTorch
-   FlexAttention `BlockMask`.
-4. Every later step for the same layer and CFG branch reuses that unchanged
-   mask. Cross-attention remains on dense SDPA.
+1. `exact` runs dense FlexAttention with LSE, followed by an exact Triton QK
+   mass pass. This is the oracle/reference route.
+2. `sampled` runs complete dense SDPA output and estimates only the next route
+   from sampled Q/K blocks. It never materializes the full attention matrix.
+3. Routes become compressed FlexAttention `BlockMask` objects. Later steps
+   reuse them, optionally update them, or dispatch high-keep routes to dense.
+4. Cross-attention and unsupported modes remain on dense SDPA.
 
-The block size is fixed to contiguous linear token groups (`128` by default),
-not the per-frame spatial HxW tiles used by the reference sparse backend.
-Sequences are padded to a block boundary only inside FlexAttention and trimmed
-afterward. `3120` tokens therefore become `3200`; `57600` is already divisible
-by `128`.
+The Flex block size remains 128. Without spatial reordering these are contiguous
+linear token groups. With spatial reordering, each block packs complete nearby
+image microtiles. Sequences are padded to a block boundary only inside
+FlexAttention and trimmed afterward. `3120` tokens therefore become `3200`;
+`57600` is already divisible by `128`.
 
 Current version boundaries:
 
-- no route update, expansion, drop policy, centroid, sampled statistics, or
-  adaptive contraction after the dense bootstrap;
-- no automatic dense/Flex layer dispatch and no fixed K-count buckets yet;
-- `create_block_mask` construction and first-use compilation are part of the
-  run, but have not yet been optimized or comprehensively benchmarked;
-- bootstrap route mass is exact (up to normal kernel floating-point error) and
-  uses no sampling, but it still pays for a second full QK pass;
+- exact refresh and sampled lightweight updates are separate explicit modes;
+- automatic dense/Flex dispatch is available, but fixed K-count buckets and
+  learned/adaptive sampling are not yet implemented;
+- divisible sequences build BlockMask directly from packed KV indices; a
+  partial final block retains the mature element-mask builder;
+- exact bootstrap still pays for a second full QK pass, while sampled bootstrap
+  trades route accuracy for much lower startup cost;
 - the exact-mass path currently requires CUDA/Triton and 128-token route
   blocks; its two 128x64 subtiles use atomic addition to form each block mass;
 - only batch-1 global self-attention uses FlexAttention; unsupported modes and
   all cross-attention calls fall back to dense SDPA;
-- this is a performance/correctness prototype. Its static route can accumulate
-  quality error across denoising steps and should not be treated as the final
-  sparse inference policy.
+- the final denoising step releases route and BlockMask state before VAE decode;
+  without this, 57K metadata can prevent selection of a VAE convolution engine;
+- this remains a research prototype; the current matched validation covers one
+  prompt and seed and is not a general quality claim.
 
 Use `--no-flex-compile` only for debugging. The normal path compiles
 FlexAttention once and reuses the compiled kernel and per-layer BlockMasks.
@@ -112,6 +167,63 @@ failed in the device convolution engine, after timing had already been saved.
 These numbers establish the attention path only and are not yet a production
 end-to-end speedup claim. The compact record is in
 `results/flex_lse_57k_summary.json`.
+
+The newer sampled/hybrid implementation closes that startup gap. On matched
+1280x720, 61-frame, 5-step Wan2.1-T2V-14B inference:
+
+- dense model forwards: `406.583 s`;
+- sampled-bootstrap Hybrid with one step-2 update: `386.919 s`, or `1.0508x`;
+- steady Hybrid steps: about `72.70 s` versus dense `81.26 s`;
+- 15 of 80 layer/CFG routes dispatched to dense; the other 65 used Flex;
+- matched output quality: `PSNR 28.38 dB`, `SSIM 0.8517` over 61 frames;
+- both dense and Hybrid completed VAE decode and wrote video.
+
+The exact command, stage profile, limitations, and artifact names are in
+`results/FLEX_ITERATION_REPORT_ZH.md`.
+
+The spatial follow-up produced two useful Pareto points on the same matched
+run:
+
+- spatial packing + global sampled update: `385.161 s` (`1.0556x`), PSNR
+  `27.65 dB`, SSIM `0.8507`;
+- spatial frontier/directional update: `395.330 s` (`1.0285x`), PSNR
+  `27.70 dB`, SSIM `0.8573`.
+
+Direction expansion improves both quality metrics relative to the same spatial
+baseline, but costs about 10.17 seconds. The maintained 57K frontier is only
+20.72% of matrix cells; nevertheless the current update still computes global
+16-sample mass, so frontier-only candidate generation does not remove the main
+update cost.
+
+### Reproducibility
+
+The frontend injects the current attention ID, denoising step, CFG branch, and
+token grid into Wan at runtime through `attention_backends/context.py`. It does
+not require edits to the Wan checkout. The adapter also installs the portable
+`clamp/round/to(uint8)` video conversion needed by some accelerator builds.
+Timing is collected by the same runtime adapter; `--timing result.json` writes
+the complete command configuration,
+study/Wan Git revisions and dirty state, device and PyTorch version, plus
+per-model-forward CUDA timings even if a later VAE decode fails.
+
+The currently validated Wan base revision is
+`9737cba` (`Update README with community projects using Wan2.1 (#582)`). A
+minimal setup is:
+
+```bash
+git clone https://github.com/Wan-Video/Wan2.1.git /path/to/Wan2.1
+git -C /path/to/Wan2.1 checkout 9737cba
+pip install -r /path/to/Wan2.1/requirements.txt
+pip install -r requirements-study.txt
+
+python3 infer.py --wan-repo /path/to/Wan2.1 \
+  --model-dir /path/to/Wan2.1-T2V-14B \
+  --backend dense --steps 2 --timing results/dense_timing.json
+```
+
+Model weights are intentionally not stored in this repository. Flex exact-mass
+profiling additionally requires a CUDA/accelerator PyTorch build with
+FlexAttention and Triton support.
 
 For sparse inference, `--tile` is a target spatial tile area rather than a
 linear token count. The backend reads Wan's `(F, H, W)` token grid and chooses
@@ -154,6 +266,9 @@ python3 -m profiles.matrix_sparsity --frames 5 --steps 5
 python3 -m profiles.hotspot_evolution --frames 5 --steps 5 --mode observe
 python3 -m profiles.single_query --frames 5 --steps 5
 python3 -m profiles.heatmap
+python3 -m profiles.spatial_direction_search --frames 5 --steps 5
+python3 -m profiles.video_quality reference.mp4 candidate.mp4 \
+  --output results/video_quality.json
 ```
 
 The unified benchmark is split into a CLI/report frontend
