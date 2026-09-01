@@ -353,6 +353,12 @@ def _build_block_mask(route, tokens, block_size):
 
 _COMPILED_FLEX_ATTENTION = None
 
+# Every route producer in this backend retains at least one K block per query
+# block. Partial-tail masks also route padded queries to the fallback key. This
+# lets the generated FlexAttention kernel omit empty-row guards and denominator
+# fixups without changing attention semantics.
+_SPARSE_KERNEL_OPTIONS = {"ROWS_GUARANTEED_SAFE": True}
+
 
 def _flex_kernel(compile_kernel):
     global _COMPILED_FLEX_ATTENTION
@@ -381,7 +387,11 @@ def _flex_output(q, k, v, block_mask, block_size, compile_kernel, scale=None):
         v = F.pad(v, (0, 0, 0, padding))
 
     output = _flex_kernel(compile_kernel)(
-        q, k, v, block_mask=block_mask, scale=scale)
+        q, k, v,
+        block_mask=block_mask,
+        scale=scale,
+        kernel_options=_SPARSE_KERNEL_OPTIONS,
+    )
     return output[:, :, :tokens].transpose(1, 2).contiguous()
 
 

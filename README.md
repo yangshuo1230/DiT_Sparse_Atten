@@ -145,6 +145,9 @@ Current version boundaries:
   sorts; immutable empty partial-block metadata is shared across routes;
 - spatial Q/K/V placement is fused into one contiguous-feature Triton gather,
   following the fused placement pattern used by Sparse-VideoGen;
+- sparse FlexAttention runs declare the route's one-K-block-per-row invariant
+  through `ROWS_GUARANTEED_SAFE`, removing empty-row guards from the generated
+  kernel without changing selected blocks or softmax semantics;
 - exact bootstrap still pays for a second full QK pass, while sampled bootstrap
   trades route accuracy for much lower startup cost;
 - the exact-mass path currently requires CUDA/Triton and 128-token route
