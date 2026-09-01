@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-09-01T20:45:00+00:00",
+  "comparison": {
+    "framework": "Diffusers 0.34.0 with SVG-style Wan execution",
+    "device": "PPU-ZW810E",
+    "size": "1280*720",
+    "frames": 61,
+    "denoising_steps": 5,
+    "seed": 0,
+    "prompt": "A small white dog running on a beach at sunset",
+    "flex_policy": {
+      "keep": 0.625,
+      "mass_target": 0.95,
+      "bootstrap": "sampled",
+      "route_samples": 16,
+      "sampled_update_interval": 2,
+      "route_persistence": 0.5,
+      "dense_route_threshold": 0.58,
+      "first_frame_key_sink": true,
+      "first_transformer_layer_dense": true
+    }
+  },
+  "performance": {
+    "dense_model_forward_cuda_seconds": 388.352828125,
+    "flex_model_forward_cuda_seconds": 375.18873828125,
+    "seconds_saved": 13.164089843749991,
+    "speedup": 1.0350865804343037,
+    "time_reduction_percent": 3.389724212208604,
+    "dense_step_cuda_seconds": [
+      78.93023046875001,
+      77.35745703125,
+      77.35205859375,
+      77.35633203124999,
+      77.35675
+    ],
+    "flex_step_cuda_seconds": [
+      83.6520859375,
+      74.74374609375,
+      75.12984374999999,
+      70.8322265625,
+      70.8308359375
+    ]
+  },
+  "routing": {
+    "phase_counts": {
+      "sampled_bootstrap": 78,
+      "sampled_update": 56,
+      "sparse_reuse": 218,
+      "dense_dispatch": 94,
+      "first_layer_dense": 10
+    },
+    "released_routes": 78,
+    "mean_route_keep": 0.5318791006620114,
+    "dense_dispatched_routes": 24
+  },
+  "quality_against_dense": {
+    "frames": 61,
+    "mean_psnr": 29.110156016457406,
+    "mean_ssim": 0.8927762410679801,
+    "psnr_quantiles": {
+      "p10": 28.21917494203476,
+      "p50": 28.993126401342238,
+      "p90": 29.955926821100228
+    },
+    "ssim_quantiles": {
+      "p10": 0.8789560198783875,
+      "p50": 0.8915203213691711,
+      "p90": 0.9058451652526855
+    }
+  },
+  "artifacts": "Benchmark videos and verbose per-forward timing were temporary validation artifacts and are not committed."
+}

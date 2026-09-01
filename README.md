@@ -34,11 +34,14 @@ spatial tiles.
 The main inference path uses the same Diffusers `WanPipeline` and model format
 as Sparse-VideoGen. SVG's Transformer execution and fast operators are used,
 but SVG's spatial/temporal mask strategy is not: self-attention is delegated to
-this repository's original `dense`, `sparse`, or `flex_reuse` backend. Their
-routing policies are unchanged by the inference-framework migration.
+this repository's `dense`, `sparse`, or `flex_reuse` backend. Sparse routes
+always retain the first latent frame as a key sink, and transformer layer 0
+always uses dense attention.
 
 Existing files under `results/` are historical evidence from the former
 official-Wan frontend and must not be mixed with new Diffusers timings.
+The current SVG/Diffusers matched benchmark is recorded in
+`results/final_svg_sink_benchmark.json`.
 
 ## Inference
 

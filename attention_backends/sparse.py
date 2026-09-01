@@ -44,6 +44,8 @@ class SparseConfig:
     use_triton: bool = False
     # Prepare the next route while Wan executes cross-attention/FFN.
     prefetch_route: bool = True
+    first_frame_sink: bool = True
+    first_layer_dense: bool = True
 
 
 @dataclass(frozen=True)
@@ -807,6 +809,8 @@ class MatrixSparseBackend:
             route, output = _dense_route(
                 q, k, v, layout, self.config.query_chunk,
                 self.config.mass_target, self.config.keep, scale)
+            if self.config.first_frame_sink:
+                route["mask"][..., :layout.block_h * layout.block_w] = True
             route["grid"] = (layout.frames, layout.height, layout.width)
             route["spatial_tile"] = (layout.tile_h, layout.tile_w)
             self.state[key] = route
@@ -863,6 +867,8 @@ class MatrixSparseBackend:
         if self.config.policy != "reuse":
             next_mask = _drop_low_mass(
                 route, normalized, self.config.drop_factor)
+        if self.config.first_frame_sink:
+            next_mask[..., :layout.block_h * layout.block_w] = True
         next_mask_device = (next_mask.to(q.device)
                             if next_mask.device != q.device else next_mask)
         previous_mass = previous["mass"].to(q.device).float()
@@ -925,7 +931,10 @@ class MatrixSparseBackend:
 
     def __call__(self, q, k, v, softmax_scale=None, **kwargs):
         if q.shape[1] == k.shape[1] and q.shape[0] == 1:
-            _, _, _, grid = routing_context(include_grid=True)
+            attention_id, _, _, grid = routing_context(include_grid=True)
+            if self.config.first_layer_dense and attention_id == 0:
+                return self.dense(
+                    q, k, v, softmax_scale=softmax_scale, **kwargs)
             layout = _spatial_layout(grid, self.config.tile, q.shape[1])
             if layout is not None:
                 return self._sparse_attention(

@@ -74,6 +74,10 @@ class FlexReuseConfig:
     direction_expand_q: bool = True
     direction_expand_k: bool = True
     direction_expand_joint: bool = True
+    # Wan's first latent frame is a globally visible key sink.
+    first_frame_sink: bool = True
+    # Keep the first transformer layer exact on every denoising pass.
+    first_layer_dense: bool = True
 
 
 def _top_mass_route(mass, target, keep):
@@ -448,6 +452,7 @@ class FlexReuseBackend:
             "sampled_update": 0,
             "sparse_reuse": 0,
             "dense_dispatch": 0,
+            "first_layer_dense": 0,
         }
         self.finished_routes = []
 
@@ -511,7 +516,7 @@ class FlexReuseBackend:
         layout = state.get("layout")
         if (self.config.directional_update and previous is not None
                 and layout is not None):
-            return directional_budget_update(
+            result = directional_budget_update(
                 mass,
                 previous,
                 layout.neighbors(q.device),
@@ -526,6 +531,7 @@ class FlexReuseBackend:
                 expand_joint=self.config.direction_expand_joint,
                 previous_frontier=state.get("frontier"),
             )
+            return self._add_first_frame_sink(state, result)
         if self.config.route_persistence and previous is not None:
             mass = (
                 mass
@@ -538,7 +544,26 @@ class FlexReuseBackend:
         frontier = None
         if layout is not None:
             frontier = frontier_mask(route, layout.neighbors(q.device))
-        return {"route": route, "frontier": frontier}
+        return self._add_first_frame_sink(
+            state, {"route": route, "frontier": frontier})
+
+    def _add_first_frame_sink(self, state, result):
+        if not self.config.first_frame_sink:
+            return result
+        grid = state.get("grid")
+        if grid is None:
+            return result
+        route = result["route"].clone()
+        first_frame_blocks = math.ceil(
+            (grid[1] * grid[2]) / self.config.block_size)
+        route[..., :first_frame_blocks] = True
+        result = dict(result)
+        result["route"] = route
+        layout = state.get("layout")
+        if layout is not None:
+            result["frontier"] = frontier_mask(
+                route, layout.neighbors(route.device))
+        return result
 
     def _install_route(self, state, result, tokens):
         route = result["route"]
@@ -643,6 +668,14 @@ class FlexReuseBackend:
                 **kwargs)
 
         attention_id, step, branch, grid = routing_context(include_grid=True)
+        if self.config.first_layer_dense and attention_id == 0:
+            self.phase_counts["first_layer_dense"] += 1
+            return self.dense(
+                q, k, v, q_lens=q_lens, k_lens=k_lens,
+                dropout_p=dropout_p, softmax_scale=softmax_scale,
+                q_scale=q_scale, causal=causal, window_size=window_size,
+                deterministic=deterministic, dtype=dtype, version=version,
+                **kwargs)
         layout = self._spatial_layout(grid, q.shape[1])
         if self.config.spatial_reorder and layout is None:
             return self.dense(
@@ -680,6 +713,9 @@ class FlexReuseBackend:
                     compile_kernel=self.config.compile_kernel,
                     scale=softmax_scale,
                 )
+                route = self._add_first_frame_sink(
+                    {"grid": grid, "layout": layout},
+                    {"route": route})["route"]
                 self.state[key] = {
                     "route": route,
                     "frontier": (frontier_mask(
@@ -689,6 +725,7 @@ class FlexReuseBackend:
                         route, q.shape[1], self.config.block_size),
                     "step": step,
                     "layout": layout,
+                    "grid": grid,
                 }
                 self._update_dispatch(self.state[key])
                 self.phase_counts["dense_bootstrap"] += 1
@@ -705,6 +742,7 @@ class FlexReuseBackend:
                     "block_mask": None,
                     "step": step,
                     "layout": layout,
+                    "grid": grid,
                 }
                 self.state[key] = state
                 if (self.config.prefetch_sampled_bootstrap
@@ -747,6 +785,8 @@ class FlexReuseBackend:
                 q, k, lse, self.config.block_size, scale=softmax_scale)
             route = _top_mass_route(
                 mass, self.config.mass_target, self.config.keep)
+            route = self._add_first_frame_sink(
+                state, {"route": route})["route"]
             state.update({
                 "route": route,
                 "frontier": (frontier_mask(

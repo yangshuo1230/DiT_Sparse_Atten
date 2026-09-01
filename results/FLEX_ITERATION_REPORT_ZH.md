@@ -1,5 +1,12 @@
 # FlexAttention 轻量路由迭代报告
 
+> 2026-09-01 SVG/Diffusers 迁移后的 matched 复测：稀疏 route 强制保留首个
+> latent frame 作为 key sink，Transformer 第 0 层始终使用 dense attention。
+> 1280×720、61帧、5 steps 下，dense model-forward 为 `388.353 s`，Flex 为
+> `375.189 s`，加速 `1.0351×`（节省 `13.164 s` / `3.39%`）；相对 dense
+> 视频 PSNR `29.110 dB`、SSIM `0.8928`。精简证据见
+> `final_svg_sink_benchmark.json`。下文旧官方 Wan frontend 数据保留为历史对照。
+
 ## 结论
 
 当前实现已经在真实 Wan2.1-T2V-14B、1280×720、61 帧、5 denoising steps
