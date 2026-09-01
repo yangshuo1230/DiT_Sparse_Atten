@@ -1,7 +1,7 @@
 # Wan attention study
 
-Minimal Wan2.1-T2V inference frontend with pluggable attention backends and isolated
-profiling programs.
+Wan2.1-T2V Diffusers inference with SVG's optimized execution path and
+study-owned pluggable attention routing.
 
 ## Layout
 
@@ -10,6 +10,8 @@ infer.py                 single inference frontend
 attention_backends/
   dense.py               PyTorch SDPA backend
   context.py             runtime Wan layer/step/CFG/grid context injection
+  svg_ops.py             SVG-derived Triton Norm/elementwise and fused RoPE ops
+  wan_diffusers.py       SVG-style Wan Transformer and Attention Processor
   flex.py                reusable-route FlexAttention backend
   sparse.py              full QxK matrix sparse reference backend
 profiles/
@@ -28,6 +30,15 @@ gather/scatter operations and is not a production acceleration kernel. The
 single-query spatial 2x2 route remains a separate profiling experiment; sparse
 inference instead routes full QxK matrix blocks whose axes are per-frame HxW
 spatial tiles.
+
+The main inference path uses the same Diffusers `WanPipeline` and model format
+as Sparse-VideoGen. SVG's Transformer execution and fast operators are used,
+but SVG's spatial/temporal mask strategy is not: self-attention is delegated to
+this repository's original `dense`, `sparse`, or `flex_reuse` backend. Their
+routing policies are unchanged by the inference-framework migration.
+
+Existing files under `results/` are historical evidence from the former
+official-Wan frontend and must not be mixed with new Diffusers timings.
 
 ## Inference
 
@@ -94,6 +105,11 @@ only route measurement is sampled. With `--flex-bootstrap-prefetch`, that route
 is prepared alongside the remaining transformer work. Per-layer/CFG routes at
 or above `--flex-dense-route-threshold` remain on dense SDPA, since Flex is not
 faster for high keep fractions.
+
+FlexAttention is used for production sparse execution. FlashInfer's standard
+BSR wrapper shares one block pattern across heads, while this study requires an
+independent `[head, query_block, key_block]` route; one plan per head is neither
+equivalent nor competitive on this workload.
 
 `--flex-spatial-reorder` partitions Wan's `(F,H,W)` grid into exact spatial
 microtiles whose area divides 128, orders them by a Morton/Z traversal, and
@@ -205,33 +221,26 @@ update cost.
 
 ### Reproducibility
 
-The frontend injects the current attention ID, denoising step, CFG branch, and
-token grid into Wan at runtime through `attention_backends/context.py`. It does
-not require edits to the Wan checkout. The adapter also installs the portable
-`clamp/round/to(uint8)` video conversion needed by some accelerator builds.
-Timing is collected by the same runtime adapter; `--timing result.json` writes
-the complete command configuration,
-study/Wan Git revisions and dirty state, device and PyTorch version, plus
-per-model-forward CUDA timings even if a later VAE decode fails.
+The frontend records layer, denoising step, CFG branch, and token grid while
+executing the Diffusers transformer. Timing JSON includes the model path,
+Diffusers/PyTorch versions, fast-operator availability, route statistics, and
+per-transformer CUDA times.
 
-The currently validated Wan base revision is
-`9737cba` (`Update README with community projects using Wan2.1 (#582)`). A
-minimal setup is:
+A minimal setup is:
 
 ```bash
-git clone https://github.com/Wan-Video/Wan2.1.git /path/to/Wan2.1
-git -C /path/to/Wan2.1 checkout 9737cba
-pip install -r /path/to/Wan2.1/requirements.txt
 pip install -r requirements-study.txt
+export SVG_KERNELS_BUILD=/path/to/Sparse-VideoGen/svg/kernels/build
 
-python3 infer.py --wan-repo /path/to/Wan2.1 \
-  --model-dir /path/to/Wan2.1-T2V-14B \
+python3 infer.py \
+  --model-dir /path/to/Wan2.1-T2V-14B-Diffusers \
   --backend dense --steps 2 --timing results/dense_timing.json
 ```
 
-Model weights are intentionally not stored in this repository. Flex exact-mass
-profiling additionally requires a CUDA/accelerator PyTorch build with
-FlexAttention and Triton support.
+Model weights are not stored in this repository. `SVG_KERNELS_BUILD` enables
+fused RoPE; without it, a numerically equivalent PyTorch fallback is used.
+Flex inference requires a CUDA/accelerator PyTorch build with FlexAttention and
+Triton support.
 
 For sparse inference, `--tile` is a target spatial tile area rather than a
 linear token count. The backend reads Wan's `(F, H, W)` token grid and chooses
@@ -255,8 +264,7 @@ not form their 3x3 Cartesian product.
 Common options:
 
 ```text
---model-dir /root/.cache/wan2.1-14b
---wan-repo /root/Wan2.1
+--model-dir /root/models/wan2.1-t2v-14b-diffusers
 --size 832*480
 --frames 17
 --steps 5

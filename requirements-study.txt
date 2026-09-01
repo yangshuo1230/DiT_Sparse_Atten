@@ -1,5 +1,10 @@
-# Install Wan2.1's accelerator-specific requirements first. These packages are
-# used by this repository's tests and video-quality reporting.
+# Install the accelerator-specific PyTorch build separately. The inference
+# frontend uses the same Diffusers model format as Sparse-VideoGen.
+diffusers==0.34.0
+transformers>=4.49.2
+accelerate>=1.7.0
+imageio>=2.31
+imageio-ffmpeg>=0.4.9
 pytest>=8
 opencv-python-headless>=4.8
 scikit-image>=0.22

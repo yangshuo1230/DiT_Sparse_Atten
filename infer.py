@@ -5,25 +5,33 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import runpy
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
 
 DEFAULT_PROMPT = "A small white dog running on a beach at sunset"
+DEFAULT_NEGATIVE_PROMPT = (
+    "Bright tones, overexposed, static, blurred details, subtitles, style, works, "
+    "paintings, images, static, overall gray, worst quality, low quality, JPEG "
+    "compression residue, ugly, incomplete, extra fingers, poorly drawn hands, "
+    "poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, "
+    "still picture, messy background, three legs, many people in the background, "
+    "walking backwards"
+)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--backend", choices=("dense", "sparse", "flex_reuse"), default="dense")
-    parser.add_argument("--wan-repo", type=Path, default=Path("/root/Wan2.1"))
-    parser.add_argument("--model-dir", type=Path, default=Path("/root/.cache/wan2.1-14b"))
+    parser.add_argument(
+        "--model-dir", type=Path,
+        default=Path("/root/models/wan2.1-t2v-14b-diffusers"))
     parser.add_argument("--output", type=Path, default=Path("output.mp4"))
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
+    parser.add_argument("--negative-prompt", default=DEFAULT_NEGATIVE_PROMPT)
     parser.add_argument("--size", default="832*480")
     parser.add_argument("--frames", type=int, default=17)
     parser.add_argument("--steps", type=int, default=5)
@@ -125,7 +133,9 @@ def _json_value(value):
     return value
 
 
-def _write_timing(path, args, backend, wan_repo, error=None):
+def _write_timing(path, args, backend, error=None):
+    import diffusers
+
     from attention_backends.context import runtime_profile
 
     profile = runtime_profile()
@@ -145,8 +155,10 @@ def _write_timing(path, args, backend, wan_repo, error=None):
             "torch_version": torch.__version__,
             "cuda_available": torch.cuda.is_available(),
             "device": device,
+            "diffusers_version": diffusers.__version__,
             "study_git": _git_state(Path(__file__).resolve().parent),
-            "wan_git": _git_state(wan_repo),
+            "model_path": str(args.model_dir.resolve()),
+            "svg_operators": getattr(backend, "svg_operator_status", None),
         },
         "routing": {
             "backend": getattr(backend, "name", type(backend).__name__),
@@ -167,12 +179,12 @@ def _write_timing(path, args, backend, wan_repo, error=None):
 
 def install_backend(args):
     if args.backend == "dense":
-        from attention_backends.dense import install
-        return install()
+        from attention_backends.dense import DenseBackend
+        return DenseBackend()
 
     if args.backend == "flex_reuse":
-        from attention_backends.flex import FlexReuseConfig, install_flex_reuse
-        return install_flex_reuse(FlexReuseConfig(
+        from attention_backends.flex import FlexReuseBackend, FlexReuseConfig
+        return FlexReuseBackend(FlexReuseConfig(
             block_size=args.flex_block,
             keep=args.keep,
             mass_target=args.mass_target,
@@ -198,8 +210,8 @@ def install_backend(args):
             direction_expand_joint=args.flex_direction_joint,
         ))
 
-    from attention_backends.sparse import SparseConfig, install_sparse
-    return install_sparse(SparseConfig(
+    from attention_backends.sparse import MatrixSparseBackend, SparseConfig
+    return MatrixSparseBackend(SparseConfig(
         tile=args.tile,
         keep=args.keep,
         mass_target=args.mass_target,
@@ -213,38 +225,64 @@ def install_backend(args):
 
 def main():
     args = parse_args()
-    wan_repo = args.wan_repo.resolve()
-    if not (wan_repo / "generate.py").is_file():
-        raise SystemExit(f"Wan generate.py not found under {wan_repo}")
     if not args.model_dir.is_dir():
         raise SystemExit(f"Model directory not found: {args.model_dir}")
-    sys.path.insert(0, str(wan_repo))
+
+    from attention_backends.context import _install_transformer_engine_compatibility
+    _install_transformer_engine_compatibility()
+    from diffusers import AutoencoderKLWan, WanPipeline
+    from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
+    from diffusers.utils import export_to_video
+
+    from attention_backends.wan_diffusers import install_svg_wan_pipeline
+
     backend = install_backend(args)
-    # Older local Wan patches consumed this variable. Timing is now collected
-    # by the repository-owned runtime adapter, so never rely on external edits.
     os.environ.pop("WAN_TIMING_PATH", None)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    sys.argv = [
-        str(wan_repo / "generate.py"),
-        "--task", "t2v-14B",
-        "--size", args.size,
-        "--frame_num", str(args.frames),
-        "--sample_steps", str(args.steps),
-        "--base_seed", str(args.seed),
-        "--ckpt_dir", str(args.model_dir.resolve()),
-        "--prompt", args.prompt,
-        "--save_file", str(args.output.resolve()),
-        "--offload_model", str(args.offload_model),
-    ]
+
+    try:
+        width, height = (int(value) for value in args.size.split("*", 1))
+    except (AttributeError, ValueError) as error:
+        raise SystemExit("--size must use WIDTH*HEIGHT, for example 1280*720") from error
+
+    model_path = str(args.model_dir.resolve())
+    vae = AutoencoderKLWan.from_pretrained(
+        model_path, subfolder="vae", torch_dtype=torch.float32,
+        local_files_only=True)
+    scheduler = UniPCMultistepScheduler(
+        prediction_type="flow_prediction", use_flow_sigmas=True,
+        num_train_timesteps=1000, flow_shift=5.0)
+    pipe = WanPipeline.from_pretrained(
+        model_path, vae=vae, torch_dtype=torch.bfloat16,
+        local_files_only=True)
+    pipe.scheduler = scheduler
+    backend.svg_operator_status = install_svg_wan_pipeline(
+        pipe.transformer, backend)
+    if args.offload_model:
+        pipe.enable_model_cpu_offload()
+    else:
+        pipe.to("cuda")
+
+    generator = torch.Generator(device="cuda").manual_seed(args.seed)
     error = None
     try:
-        runpy.run_path(str(wan_repo / "generate.py"), run_name="__main__")
+        frames = pipe(
+            prompt=args.prompt,
+            negative_prompt=args.negative_prompt,
+            height=height,
+            width=width,
+            num_frames=args.frames,
+            guidance_scale=5.0,
+            num_inference_steps=args.steps,
+            generator=generator,
+        ).frames[0]
+        export_to_video(frames, str(args.output.resolve()), fps=16)
     except BaseException as caught:
         error = caught
         raise
     finally:
         if args.timing:
-            _write_timing(args.timing.resolve(), args, backend, wan_repo, error)
+            _write_timing(args.timing.resolve(), args, backend, error)
 
 
 if __name__ == "__main__":
