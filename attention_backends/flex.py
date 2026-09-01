@@ -15,6 +15,7 @@ import torch.nn.functional as F
 
 from .context import routing_context
 from .dense import DenseBackend, install
+from .layout_ops import pack_boolean_rows
 from .routing import directional_budget_update, frontier_mask
 from .spatial import build_spatial_layout
 
@@ -30,11 +31,13 @@ try:
         BlockMask,
         create_block_mask,
         flex_attention,
+        noop_mask,
     )
 except ImportError:  # Kept importable on older PyTorch installations.
     BlockMask = None
     create_block_mask = None
     flex_attention = None
+    noop_mask = None
 
 
 @dataclass(frozen=True)
@@ -267,13 +270,35 @@ def _dense_bootstrap(q, k, v, block_size, mass_target, keep,
 
 def _pack_route(route):
     """Pack a boolean [H,Q,K] route into counts and compact K indices."""
-    counts = route.sum(-1, dtype=torch.int32)
-    # Keep selected indices first and every unselected index afterward. The
-    # latter are needed by PyTorch 2.8's KV-to-Q transpose metadata builder,
-    # even though only ``counts`` entries execute in the forward kernel.
-    indices = torch.argsort(
-        route.to(torch.int8), dim=-1, descending=True, stable=True)
+    # Keep selected indices first and every unselected index afterward.  The
+    # CUDA path performs a stable linear compaction instead of a full sort.
+    # Unselected IDs are still retained for PyTorch's KV-to-Q metadata builder.
+    counts, indices = pack_boolean_rows(route)
     return counts.unsqueeze(0), indices.to(torch.int32).unsqueeze(0)
+
+
+_EMPTY_BLOCK_METADATA = {}
+
+
+def _empty_block_metadata(route):
+    """Return shared zero-count partial-block metadata for a route shape."""
+    heads, query_blocks, _key_blocks = route.shape
+    key = (route.device, heads, query_blocks)
+    metadata = _EMPTY_BLOCK_METADATA.get(key)
+    if metadata is None:
+        counts = torch.zeros(
+            (1, heads, query_blocks), device=route.device, dtype=torch.int32)
+        # FlexAttention uses the final index dimension to infer the logical
+        # number of K blocks even when every count is zero, so it must retain
+        # full width.  Sharing this immutable tensor still avoids two dense
+        # BxQxK int32 allocations in every persistent BlockMask.
+        indices = torch.arange(
+            query_blocks, device=route.device, dtype=torch.int32,
+        ).view(1, 1, 1, query_blocks).expand(
+            1, heads, query_blocks, query_blocks).contiguous()
+        metadata = (counts, indices)
+        _EMPTY_BLOCK_METADATA[key] = metadata
+    return metadata
 
 
 def _build_block_mask(route, tokens, block_size):
@@ -287,16 +312,25 @@ def _build_block_mask(route, tokens, block_size):
     padded_tokens = route.shape[-1] * block_size
 
     if tokens == padded_tokens:
-        empty_counts = torch.zeros_like(counts)
-        empty_indices = torch.arange(
-            route.shape[-1], device=route.device, dtype=torch.int32,
-        ).expand_as(indices).contiguous()
-        return BlockMask.from_kv_blocks(
-            empty_counts, empty_indices,
+        # Construct both traversal directions directly from the boolean route.
+        # ``from_kv_blocks`` densifies and sorts once more to derive Q metadata;
+        # packing the transpose with the same stable linear kernel is equivalent
+        # and keeps BlockMask construction entirely O(H*Q*K).
+        q_counts, q_indices = _pack_route(
+            route.transpose(-2, -1).contiguous())
+        empty_counts, empty_indices = _empty_block_metadata(route)
+        return BlockMask(
+            seq_lengths=(padded_tokens, padded_tokens),
+            kv_num_blocks=empty_counts,
+            kv_indices=empty_indices,
             full_kv_num_blocks=counts,
             full_kv_indices=indices,
-            BLOCK_SIZE=block_size,
-            seq_lengths=(padded_tokens, padded_tokens),
+            q_num_blocks=empty_counts,
+            q_indices=empty_indices,
+            full_q_num_blocks=q_counts,
+            full_q_indices=q_indices,
+            BLOCK_SIZE=(block_size, block_size),
+            mask_mod=noop_mask,
         )
 
     # A partial final Q/K block needs element-level masking. Retain the mature
@@ -615,9 +649,7 @@ class FlexReuseBackend:
         if q_scale is not None:
             q = q * q_scale
         if layout is not None:
-            q = layout.reorder(q)
-            k = layout.reorder(k)
-            v = layout.reorder(v)
+            q, k, v = layout.reorder_qkv(q, k, v)
 
         def finish(output):
             if layout is not None:

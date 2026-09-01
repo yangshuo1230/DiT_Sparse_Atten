@@ -27,6 +27,19 @@ def test_pack_route_preserves_selected_indices():
             assert selected.tolist() == torch.where(route[head, query])[0].tolist()
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
+def test_triton_pack_route_matches_stable_reference():
+    torch.manual_seed(19)
+    route = torch.rand(5, 37, 450, device="cuda") < 0.61
+    counts, indices = _pack_route(route)
+    expected_counts = route.sum(-1, dtype=torch.int32).unsqueeze(0)
+    expected_indices = torch.argsort(
+        route.to(torch.int8), dim=-1, descending=True, stable=True,
+    ).to(torch.int32).unsqueeze(0)
+    torch.testing.assert_close(counts, expected_counts)
+    torch.testing.assert_close(indices, expected_indices)
+
+
 def test_full_sampling_matches_exact_block_route_mass():
     torch.manual_seed(4)
     tokens, heads, head_dim, block = 12, 2, 8, 4
@@ -133,3 +146,47 @@ def test_flex_output_matches_explicit_block_mask():
     torch.testing.assert_close(
         output.transpose(1, 2).float(), reference,
         atol=5e-3, rtol=3e-2)
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or flex_attention is None,
+    reason="FlexAttention CUDA support is required",
+)
+def test_direct_divisible_block_mask_matches_framework_builder():
+    torch.manual_seed(11)
+    tokens, heads, head_dim, block = 256, 2, 32, 128
+    q = torch.randn(1, tokens, heads, head_dim, device="cuda", dtype=torch.bfloat16)
+    k = torch.randn_like(q)
+    v = torch.randn_like(q)
+    route = torch.tensor(
+        [[[True, False], [True, True]], [[True, True], [False, True]]],
+        device="cuda",
+    )
+    block_mask = _build_block_mask(route, tokens, block)
+    counts, indices = _pack_route(route)
+    empty_counts = torch.zeros_like(counts)
+    empty_indices = torch.arange(
+        route.shape[-1], device=route.device, dtype=torch.int32,
+    ).expand_as(indices).contiguous()
+    reference_mask = type(block_mask).from_kv_blocks(
+        empty_counts,
+        empty_indices,
+        full_kv_num_blocks=counts,
+        full_kv_indices=indices,
+        BLOCK_SIZE=block,
+        seq_lengths=(tokens, tokens),
+    )
+    for field in (
+        "kv_num_blocks", "kv_indices", "full_kv_num_blocks",
+        "full_kv_indices", "q_num_blocks", "q_indices",
+        "full_q_num_blocks", "full_q_indices",
+    ):
+        torch.testing.assert_close(
+            getattr(block_mask, field), getattr(reference_mask, field))
+
+    output = _flex_output(q, k, v, block_mask, block, compile_kernel=False)
+    reference = _flex_output(
+        q, k, v, reference_mask, block, compile_kernel=False)
+    torch.testing.assert_close(
+        output, reference, atol=0, rtol=0,
+    )

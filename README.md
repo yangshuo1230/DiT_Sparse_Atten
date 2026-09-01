@@ -140,6 +140,11 @@ Current version boundaries:
   learned/adaptive sampling are not yet implemented;
 - divisible sequences build BlockMask directly from packed KV indices; a
   partial final block retains the mature element-mask builder;
+- CUDA route metadata uses stable linear compaction for both KV and transposed
+  Q traversal, avoiding the framework builder's dense conversion and row-wise
+  sorts; immutable empty partial-block metadata is shared across routes;
+- spatial Q/K/V placement is fused into one contiguous-feature Triton gather,
+  following the fused placement pattern used by Sparse-VideoGen;
 - exact bootstrap still pays for a second full QK pass, while sampled bootstrap
   trades route accuracy for much lower startup cost;
 - the exact-mass path currently requires CUDA/Triton and 128-token route

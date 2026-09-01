@@ -9,6 +9,10 @@ def test_spatial_layout_is_reversible_and_keeps_microtiles_whole():
     assert sorted(layout.permutation_cpu.tolist()) == list(range(64))
     value = torch.arange(64).reshape(1, 64, 1, 1)
     torch.testing.assert_close(layout.restore(layout.reorder(value)), value)
+    q, k, v = layout.reorder_qkv(value, value + 100, value + 200)
+    torch.testing.assert_close(q, layout.reorder(value))
+    torch.testing.assert_close(k, layout.reorder(value + 100))
+    torch.testing.assert_close(v, layout.reorder(value + 200))
 
     tile_h, tile_w = layout.microtile_shape
     area = tile_h * tile_w
@@ -23,3 +27,16 @@ def test_720p_layout_preserves_token_and_block_counts():
     assert layout.blocks == 450
     assert layout.neighbors_cpu.shape == (450, 4)
     assert (layout.neighbors_cpu >= 0).any()
+
+
+def test_cuda_fused_qkv_reorder_matches_index_select():
+    if not torch.cuda.is_available():
+        return
+    layout = build_spatial_layout((2, 4, 8), block_size=8)
+    tensors = [
+        torch.randn(2, 64, 3, 17, device="cuda", dtype=torch.bfloat16)
+        for _ in range(3)
+    ]
+    actual = layout.reorder_qkv(*tensors)
+    for output, tensor in zip(actual, tensors):
+        torch.testing.assert_close(output, layout.reorder(tensor))

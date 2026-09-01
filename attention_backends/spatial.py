@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 import torch
 
+from .layout_ops import reorder_qkv
+
 
 def _divisors(value):
     return [candidate for candidate in range(1, value + 1)
@@ -81,6 +83,11 @@ class SpatialTokenLayout:
         permutation, _, _ = self._device_values(tensor.device)
         return tensor.index_select(1, permutation)
 
+    def reorder_qkv(self, q, k, v):
+        """Reorder Q/K/V together, using one CUDA launch when possible."""
+        permutation, _, _ = self._device_values(q.device)
+        return reorder_qkv(q, k, v, permutation)
+
     def restore(self, tensor):
         _, inverse, _ = self._device_values(tensor.device)
         return tensor.index_select(1, inverse)
@@ -131,9 +138,13 @@ def build_spatial_layout(grid, block_size=128, max_microtile_tokens=32):
             for y in range(y0, y0 + tile_h)
             for x in range(x0, x0 + tile_w)
         )
-    permutation_cpu = torch.tensor(permutation, dtype=torch.long)
+    # int32 is accepted by index_select on CPU/CUDA and consumed natively by
+    # the Triton gather.  Keeping cached layout indices in this dtype avoids a
+    # per-attention int64->int32 conversion and halves persistent index bytes.
+    permutation_cpu = torch.tensor(permutation, dtype=torch.int32)
     inverse_cpu = torch.empty_like(permutation_cpu)
-    inverse_cpu[permutation_cpu] = torch.arange(len(permutation_cpu))
+    inverse_cpu[permutation_cpu.long()] = torch.arange(
+        len(permutation_cpu), dtype=torch.int32)
 
     block_tiles = defaultdict(list)
     tile_to_block = {}
